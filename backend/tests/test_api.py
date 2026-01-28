@@ -1,3 +1,6 @@
+import os
+
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
@@ -6,6 +9,7 @@ from backend.app.main import app
 client = TestClient(app)
 
 
+@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set")
 def test_health():
     response = client.get("/v1/health")
     assert response.status_code == 200
@@ -14,6 +18,7 @@ def test_health():
     assert data["version"] == "0.1.0"
 
 
+@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set")
 def test_upload_query_trace_flow():
     files = {"file": ("sample.txt", b"Sample content for retrieval.")}
     response = client.post("/v1/documents", files=files)

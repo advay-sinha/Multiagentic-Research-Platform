@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from .doc_store import DocumentChunk, DocumentStore
+from .pgvector_store import search as pg_search
 
 
 @dataclass
@@ -55,13 +55,10 @@ class PlannerNode:
 
 
 class RetrieverNode:
-    def __init__(self, store: DocumentStore) -> None:
-        self._store = store
-
-    def run(self, plan: List[PlanStep], max_results: int) -> List[DocumentChunk]:
-        # TODO: Replace with real retrieval + ranking + pgvector.
+    def run(self, plan: List[PlanStep], max_results: int) -> List[Dict[str, Any]]:
+        # TODO: Replace with real retrieval + ranking + pgvector tuning.
         query = plan[0].search_query if plan else ""
-        return self._store.search(query, limit=max_results)
+        return pg_search(query, limit=max_results)
 
 
 class WriterNode:
@@ -91,18 +88,22 @@ class WriterNode:
         return {"draft_answer": answer, "citations": citations}
 
 
-def _to_evidence(chunks: List[DocumentChunk]) -> List[EvidenceChunk]:
+def _to_evidence(rows: List[Dict[str, Any]]) -> List[EvidenceChunk]:
     return [
         EvidenceChunk(
-            source_id=chunk.document_id,
-            chunk_id=chunk.chunk_id,
-            text=chunk.text,
-            score=chunk.score,
-            metadata=chunk.metadata,
-            chunk_start=chunk.chunk_start,
-            chunk_end=chunk.chunk_end,
+            source_id=row["document_id"],
+            chunk_id=row["chunk_id"],
+            text=row["text"],
+            score=row["score"],
+            metadata={
+                "url": row["url"],
+                "title": row["title"],
+                "published_at": row["published_at"],
+            },
+            chunk_start=row["chunk_start"],
+            chunk_end=row["chunk_end"],
         )
-        for chunk in chunks
+        for row in rows
     ]
 
 
@@ -110,9 +111,9 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def run_graph(query: str, store: DocumentStore, max_sources: int) -> GraphState:
+def run_graph(query: str, max_sources: int) -> GraphState:
     planner = PlannerNode()
-    retriever = RetrieverNode(store)
+    retriever = RetrieverNode()
     writer = WriterNode()
 
     plan = planner.run(query)
@@ -124,8 +125,8 @@ def run_graph(query: str, store: DocumentStore, max_sources: int) -> GraphState:
         payload={"plan": [step.search_query for step in plan]},
     )
 
-    raw_chunks = retriever.run(plan, max_results=max_sources)
-    evidence = _to_evidence(raw_chunks)
+    rows = retriever.run(plan, max_results=max_sources)
+    evidence = _to_evidence(rows)
     retrieval_event = TraceEvent(
         event_id="evt-retrieval-001",
         agent="Retriever",
