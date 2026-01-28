@@ -6,6 +6,27 @@
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r backend\requirements.txt
+```
+
+## Postgres + pgvector setup
+
+Start Postgres with pgvector:
+
+```powershell
+docker run --name research-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=research -p 5432:5432 -d pgvector/pgvector:pg16
+```
+
+Set environment variables:
+
+```powershell
+$env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/research"
+$env:EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+$env:EMBEDDING_DIM = "384"
+```
+
+Run the API:
+
+```powershell
 uvicorn backend.app.main:app --reload --port 8000
 ```
 

@@ -8,9 +8,9 @@ from typing import Any, AsyncGenerator, Dict, Iterable, Optional
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from .doc_store import DOCUMENT_STORE, DocumentChunk
 from .langgraph_stub import GraphState, TraceEvent, run_graph
 from .logging_utils import log_event, setup_logging
+from .pgvector_store import add_document, get_document, init_db, search as pg_search
 from .schemas import (
     AgentTraceEvent,
     ClaimVerification,
@@ -28,6 +28,11 @@ from .trace_store import TRACE_STORE
 
 app = FastAPI(title="Autonomous Agentic Research Platform", version="0.1.0")
 logger = setup_logging()
+
+
+@app.on_event("startup")
+async def startup_event() -> None:
+    init_db()
 
 
 @app.middleware("http")
@@ -77,7 +82,7 @@ def _chunk_answer(text: str, chunk_size: int = 80) -> Iterable[str]:
         yield text[i : i + chunk_size]
 
 
-def _build_claim_verifications(evidence: list[DocumentChunk]) -> list[ClaimVerification]:
+def _build_claim_verifications(evidence: list[Any]) -> list[ClaimVerification]:
     if not evidence:
         return []
     return [
@@ -121,7 +126,7 @@ def _trace_events_to_payload(events: list[TraceEvent]) -> list[dict[str, Any]]:
 @app.post("/v1/query", response_model=QueryResponse)
 async def query(payload: QueryRequest) -> QueryResponse:
     trace_id = f"trace-{uuid.uuid4().hex[:8]}"
-    graph_state = run_graph(payload.query, DOCUMENT_STORE, payload.options.max_sources)
+    graph_state = run_graph(payload.query, payload.options.max_sources)
     response = _build_query_response(payload, graph_state, trace_id)
 
     # TODO: Integrate real model inference, verification pipeline, and refusal handling.
@@ -132,7 +137,7 @@ async def query(payload: QueryRequest) -> QueryResponse:
 @app.post("/v1/query/stream")
 async def query_stream(payload: QueryRequest) -> StreamingResponse:
     trace_id = f"trace-{uuid.uuid4().hex[:8]}"
-    graph_state = run_graph(payload.query, DOCUMENT_STORE, payload.options.max_sources)
+    graph_state = run_graph(payload.query, payload.options.max_sources)
     response = _build_query_response(payload, graph_state, trace_id)
 
     TRACE_STORE.save_trace(trace_id, payload.query, _trace_events_to_payload(graph_state.trace_events))
@@ -159,16 +164,16 @@ async def query_stream(payload: QueryRequest) -> StreamingResponse:
 @app.post("/v1/search", response_model=SearchResponse)
 async def search(payload: SearchRequest) -> SearchResponse:
     # TODO: Integrate Bing/SerpAPI search + HTML extraction.
-    chunks = DOCUMENT_STORE.search(payload.query, limit=payload.max_results)
+    rows = pg_search(payload.query, limit=payload.max_results)
     results = [
         SearchResult(
-            source_id=chunk.document_id,
-            title=chunk.metadata.get("title", "Untitled"),
-            url=chunk.metadata.get("url", ""),
-            published_at=chunk.metadata.get("published_at", ""),
-            snippet=chunk.text[:200],
+            source_id=row["document_id"],
+            title=row["title"],
+            url=row["url"],
+            published_at=row["published_at"],
+            snippet=row["text"][:200],
         )
-        for chunk in chunks
+        for row in rows
     ]
     return SearchResponse(results=results)
 
@@ -181,21 +186,21 @@ async def upload_document(
     raw_bytes = await file.read()
     text = raw_bytes.decode("utf-8", errors="ignore")
     metadata_payload = json.loads(metadata) if metadata else {}
-    record = DOCUMENT_STORE.add_document(text=text, filename=file.filename, metadata=metadata_payload)
-    return DocumentUploadResponse(document_id=record.document_id, status=record.status, pages=1)
+    record = add_document(text=text, filename=file.filename, metadata=metadata_payload)
+    return DocumentUploadResponse(document_id=record["document_id"], status=record["status"], pages=1)
 
 
 @app.get("/v1/documents/{document_id}", response_model=DocumentMetadataResponse)
-async def get_document(document_id: str) -> DocumentMetadataResponse:
-    record = DOCUMENT_STORE.get_document(document_id)
+async def get_document_by_id(document_id: str) -> DocumentMetadataResponse:
+    record = get_document(document_id)
     if not record:
         raise HTTPException(status_code=404, detail="Document not found")
     return DocumentMetadataResponse(
-        document_id=record.document_id,
-        filename=record.filename,
-        uploaded_at=record.uploaded_at,
-        size_bytes=record.size_bytes,
-        status=record.status,
+        document_id=record["document_id"],
+        filename=record["filename"],
+        uploaded_at=record["uploaded_at"],
+        size_bytes=record["size_bytes"],
+        status=record["status"],
     )
 
 
