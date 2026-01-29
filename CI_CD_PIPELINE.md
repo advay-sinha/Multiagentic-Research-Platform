@@ -8,6 +8,16 @@ This repository ships a Dockerfile at the repo root. Use the steps below to keep
 docker build -t agentic-research-platform:ci .
 ```
 
+## 1a. Update the container image (rebuild + retag)
+
+```bash
+# rebuild with the latest code and overwrite the local tag
+docker build --no-cache -t agentic-research-platform:ci .
+
+# optionally add a versioned tag for pushing
+docker tag agentic-research-platform:ci agentic-research-platform:ci-<version>
+```
+
 ## 2. Run automated tests
 
 ```bash
