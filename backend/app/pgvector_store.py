@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import psycopg2
+from pgvector.psycopg2 import register_vector
 from psycopg2.extras import Json
 
 from .embeddings import embed_texts
@@ -38,6 +39,7 @@ def _get_conn():
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL is required for pgvector storage")
     conn = psycopg2.connect(settings.database_url)
+    register_vector(conn)
     try:
         yield conn
     finally:
@@ -124,7 +126,7 @@ def add_document(text: str, filename: str, metadata: Optional[Dict[str, Any]] = 
                     """
                     INSERT INTO chunks (
                         chunk_id, document_id, chunk_index, text, embedding, url, title, published_at, chunk_start, chunk_end
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s::vector, %s, %s, %s, %s, %s)
                     ON CONFLICT(chunk_id) DO UPDATE SET
                         text=excluded.text,
                         embedding=excluded.embedding,
@@ -158,6 +160,15 @@ def add_document(text: str, filename: str, metadata: Optional[Dict[str, Any]] = 
     }
 
 
+def add_web_document(url: str, title: str, text: str, published_at: Optional[str], metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    safe_metadata = metadata or {}
+    safe_metadata.setdefault("url", url)
+    safe_metadata.setdefault("title", title or url)
+    safe_metadata.setdefault("published_at", published_at or _now())
+    filename = title or url
+    return add_document(text=text, filename=filename, metadata=safe_metadata)
+
+
 def get_document(document_id: str) -> Optional[Dict[str, Any]]:
     with _get_conn() as conn:
         with conn.cursor() as cur:
@@ -185,9 +196,9 @@ def search(query: str, limit: int = 8) -> List[Dict[str, Any]]:
             cur.execute(
                 """
                 SELECT chunk_id, document_id, text, url, title, published_at, chunk_start, chunk_end,
-                       1 - (embedding <=> %s) AS score
+                       1 - (embedding <=> %s::vector) AS score
                 FROM chunks
-                ORDER BY embedding <=> %s
+                ORDER BY embedding <=> %s::vector
                 LIMIT %s
                 """,
                 (query_vector, query_vector, limit),

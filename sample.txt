@@ -1,0 +1,4 @@
+Sample guidance on X:
+- This is a placeholder document used for local testing.
+- It mentions guidance updates, timelines, and summary points.
+- Use it to validate document upload, search, and query flows.

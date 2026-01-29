@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+from .llm_client import LLMClient
 from .pgvector_store import search as pg_search
 
 
@@ -40,18 +41,26 @@ class GraphState:
     evidence: List[EvidenceChunk]
     draft_answer: str
     citations: List[Dict[str, Any]]
+    claim_verifications: List[Dict[str, Any]]
+    confidence_score: float
+    refusal: bool
     trace_events: List[TraceEvent]
 
 
 class PlannerNode:
+    def __init__(self, llm: LLMClient) -> None:
+        self._llm = llm
+
     def run(self, query: str) -> List[PlanStep]:
-        # TODO: Replace with real planner model call.
-        return [
-            PlanStep(
-                question=f"Key points for: {query}",
-                search_query=f"{query} evidence",
-            )
-        ]
+        # TODO: Replace with structured planning output.
+        prompt = (
+            "Create a minimal retrieval plan for the query. "
+            "Return a short search query string."
+        )
+        search_query = self._llm.generate(prompt=prompt, user_content=query).strip()
+        if not search_query:
+            search_query = f"{query} evidence"
+        return [PlanStep(question=f"Key points for: {query}", search_query=search_query)]
 
 
 class RetrieverNode:
@@ -62,13 +71,27 @@ class RetrieverNode:
 
 
 class WriterNode:
+    def __init__(self, llm: LLMClient) -> None:
+        self._llm = llm
+
     def run(self, query: str, evidence: List[EvidenceChunk]) -> Dict[str, Any]:
-        # TODO: Replace with real answer generation and citation mapping.
-        if evidence:
-            snippet = evidence[0].text[:160]
-            answer = f"According to the retrieved sources, {snippet}"
-        else:
-            answer = f"No indexed sources matched the query: {query}"
+        # TODO: Improve citation mapping with explicit span alignment.
+        evidence_blocks = []
+        for chunk in evidence:
+            evidence_blocks.append(
+                f"[{chunk.chunk_id}] {chunk.text[:400]}"
+            )
+        context = "\n".join(evidence_blocks) if evidence_blocks else "No evidence available."
+        prompt = (
+            "Write a grounded answer using only the evidence provided. "
+            "If evidence is insufficient, say so."
+        )
+        answer = self._llm.generate(prompt=prompt, user_content=f"Query: {query}\nEvidence:\n{context}")
+        if not answer:
+            if evidence:
+                answer = f"According to the retrieved sources, {evidence[0].text[:160]}"
+            else:
+                answer = f"No indexed sources matched the query: {query}"
 
         citations = []
         for index, chunk in enumerate(evidence):
@@ -86,6 +109,57 @@ class WriterNode:
             )
 
         return {"draft_answer": answer, "citations": citations}
+
+
+class CriticNode:
+    def __init__(self, llm: LLMClient) -> None:
+        self._llm = llm
+
+    def run(self, query: str, answer: str, evidence: List[EvidenceChunk]) -> str:
+        prompt = (
+            "Review the answer for missing evidence or unsupported claims. "
+            "Return a short critique."
+        )
+        context = "\n".join(chunk.text[:200] for chunk in evidence) if evidence else "No evidence."
+        critique = self._llm.generate(prompt=prompt, user_content=f"Query: {query}\nAnswer: {answer}\nEvidence: {context}")
+        return critique or "No critique available."
+
+
+class VerifierNode:
+    def __init__(self, llm: LLMClient) -> None:
+        self._llm = llm
+
+    def run(self, answer: str, evidence: List[EvidenceChunk]) -> List[Dict[str, Any]]:
+        # TODO: Replace heuristic verification with claim-level alignment.
+        if not answer or not evidence:
+            return []
+        prompt = (
+            "Identify up to 2 key claims from the answer and label them as "
+            "supported or unsupported based on the evidence."
+        )
+        evidence_ids = [chunk.chunk_id for chunk in evidence[:2]]
+        verdict = self._llm.generate(prompt=prompt, user_content=answer)
+        verdict_label = "supported" if "unsupported" not in verdict.lower() else "unsupported"
+        return [
+            {
+                "claim_id": "clm-001",
+                "claim_text": answer[:120],
+                "verdict": verdict_label,
+                "evidence_chunk_ids": evidence_ids,
+                "confidence": 0.66,
+                "notes": verdict or "Heuristic verification.",
+            }
+        ]
+
+
+def _derive_confidence(claims: List[Dict[str, Any]], evidence: List[EvidenceChunk]) -> float:
+    if not evidence:
+        return 0.0
+    if not claims:
+        return 0.2
+    supported = sum(1 for claim in claims if claim.get("verdict") == "supported")
+    ratio = supported / max(len(claims), 1)
+    return round(0.4 + 0.6 * ratio, 2)
 
 
 def _to_evidence(rows: List[Dict[str, Any]]) -> List[EvidenceChunk]:
@@ -112,9 +186,12 @@ def _now() -> str:
 
 
 def run_graph(query: str, max_sources: int) -> GraphState:
-    planner = PlannerNode()
+    llm = LLMClient()
+    planner = PlannerNode(llm)
     retriever = RetrieverNode()
-    writer = WriterNode()
+    writer = WriterNode(llm)
+    critic = CriticNode(llm)
+    verifier = VerifierNode(llm)
 
     plan = planner.run(query)
     plan_event = TraceEvent(
@@ -146,6 +223,24 @@ def run_graph(query: str, max_sources: int) -> GraphState:
         timestamp=_now(),
         payload={"citations": len(writer_output["citations"])},
     )
+    critique = critic.run(query, writer_output["draft_answer"], evidence)
+    critic_event = TraceEvent(
+        event_id="evt-critic-001",
+        agent="Critic",
+        event_type="critique",
+        timestamp=_now(),
+        payload={"notes": critique[:400]},
+    )
+    claim_verifications = verifier.run(writer_output["draft_answer"], evidence)
+    confidence_score = _derive_confidence(claim_verifications, evidence)
+    refusal = confidence_score < 0.4
+    verifier_event = TraceEvent(
+        event_id="evt-verify-001",
+        agent="Verifier",
+        event_type="verify",
+        timestamp=_now(),
+        payload={"claim_count": len(claim_verifications), "confidence_score": confidence_score, "refusal": refusal},
+    )
 
     return GraphState(
         query=query,
@@ -153,5 +248,8 @@ def run_graph(query: str, max_sources: int) -> GraphState:
         evidence=evidence,
         draft_answer=writer_output["draft_answer"],
         citations=writer_output["citations"],
-        trace_events=[plan_event, retrieval_event, writer_event],
+        claim_verifications=claim_verifications,
+        confidence_score=confidence_score,
+        refusal=refusal,
+        trace_events=[plan_event, retrieval_event, writer_event, critic_event, verifier_event],
     )

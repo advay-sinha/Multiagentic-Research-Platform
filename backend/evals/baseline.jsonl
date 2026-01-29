@@ -1,0 +1,5 @@
+{"id":"ex-001","query":"Summarize the guidance on X.","expected_facts":["guidance","updates"],"expected_citations":["sample.txt"]}
+{"id":"ex-002","query":"What does the sample document say about timelines?","expected_facts":["timelines"],"expected_citations":["sample.txt"]}
+{"id":"ex-003","query":"List the key points from the placeholder document.","expected_facts":["placeholder","testing"],"expected_citations":["sample.txt"]}
+{"id":"ex-004","query":"Is there guidance in sample2?","expected_facts":["additional","context"],"expected_citations":["sample2.txt"]}
+{"id":"ex-005","query":"Summarize both sample documents.","expected_facts":["placeholder","additional"],"expected_citations":["sample.txt","sample2.txt"]}
