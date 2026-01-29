@@ -48,6 +48,17 @@ Run the API:
 uvicorn backend.app.main:app --reload --port 8000
 ```
 
+## Frontend (Next.js)
+
+```powershell
+cd frontend
+npm install
+$env:NEXT_PUBLIC_API_BASE = "http://localhost:8000"
+npm run dev
+```
+
+Visit http://localhost:3000 to use the UI.
+
 ## Example requests
 
 Health check:
