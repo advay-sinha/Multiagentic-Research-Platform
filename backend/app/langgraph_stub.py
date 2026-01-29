@@ -42,6 +42,8 @@ class GraphState:
     draft_answer: str
     citations: List[Dict[str, Any]]
     claim_verifications: List[Dict[str, Any]]
+    confidence_score: float
+    refusal: bool
     trace_events: List[TraceEvent]
 
 
@@ -150,6 +152,16 @@ class VerifierNode:
         ]
 
 
+def _derive_confidence(claims: List[Dict[str, Any]], evidence: List[EvidenceChunk]) -> float:
+    if not evidence:
+        return 0.0
+    if not claims:
+        return 0.2
+    supported = sum(1 for claim in claims if claim.get("verdict") == "supported")
+    ratio = supported / max(len(claims), 1)
+    return round(0.4 + 0.6 * ratio, 2)
+
+
 def _to_evidence(rows: List[Dict[str, Any]]) -> List[EvidenceChunk]:
     return [
         EvidenceChunk(
@@ -220,12 +232,14 @@ def run_graph(query: str, max_sources: int) -> GraphState:
         payload={"notes": critique[:400]},
     )
     claim_verifications = verifier.run(writer_output["draft_answer"], evidence)
+    confidence_score = _derive_confidence(claim_verifications, evidence)
+    refusal = confidence_score < 0.4
     verifier_event = TraceEvent(
         event_id="evt-verify-001",
         agent="Verifier",
         event_type="verify",
         timestamp=_now(),
-        payload={"claim_count": len(claim_verifications)},
+        payload={"claim_count": len(claim_verifications), "confidence_score": confidence_score, "refusal": refusal},
     )
 
     return GraphState(
@@ -235,5 +249,7 @@ def run_graph(query: str, max_sources: int) -> GraphState:
         draft_answer=writer_output["draft_answer"],
         citations=writer_output["citations"],
         claim_verifications=claim_verifications,
+        confidence_score=confidence_score,
+        refusal=refusal,
         trace_events=[plan_event, retrieval_event, writer_event, critic_event, verifier_event],
     )

@@ -97,8 +97,8 @@ def _build_query_response(payload: QueryRequest, graph_state: GraphState, trace_
         answer=graph_state.draft_answer,
         citations=graph_state.citations,
         claim_verifications=_build_claim_verifications(graph_state.claim_verifications),
-        confidence_score=0.78,
-        refusal=False,
+        confidence_score=graph_state.confidence_score,
+        refusal=graph_state.refusal,
         trace_id=trace_id,
     )
 

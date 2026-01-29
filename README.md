@@ -93,3 +93,7 @@ Trace:
 ```powershell
 curl http://localhost:8000/v1/traces/trace-12345678
 ```
+
+## Testing
+
+See `docs/testing.md` for test setup and sample commands.

@@ -34,10 +34,13 @@ def _extract_with_readability(html: str) -> Optional[str]:
 
 
 def fetch_and_extract(url: str, title: str, published_at: Optional[str]) -> Optional[ExtractionResult]:
-    with httpx.Client(timeout=20.0, follow_redirects=True) as client:
-        response = client.get(url)
-        response.raise_for_status()
-        html = response.text
+    try:
+        with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+            response = client.get(url)
+            response.raise_for_status()
+            html = response.text
+    except httpx.HTTPError:
+        return None
 
     extracted = _extract_with_trafilatura(html, url) or _extract_with_readability(html)
     if not extracted:
