@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 import uuid
 from typing import Any, AsyncGenerator, Dict, Iterable, Optional
@@ -8,9 +9,12 @@ from typing import Any, AsyncGenerator, Dict, Iterable, Optional
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from .extraction import fetch_and_extract
 from .langgraph_stub import GraphState, TraceEvent, run_graph
 from .logging_utils import log_event, setup_logging
-from .pgvector_store import add_document, get_document, init_db, search as pg_search
+from .pgvector_store import add_document, add_web_document, get_document, init_db, search as pg_search
+from .search_providers.bing import BingSearchProvider
+from .search_providers.serpapi import SerpApiSearchProvider
 from .schemas import (
     AgentTraceEvent,
     ClaimVerification,
@@ -82,19 +86,8 @@ def _chunk_answer(text: str, chunk_size: int = 80) -> Iterable[str]:
         yield text[i : i + chunk_size]
 
 
-def _build_claim_verifications(evidence: list[Any]) -> list[ClaimVerification]:
-    if not evidence:
-        return []
-    return [
-        ClaimVerification(
-            claim_id="clm-001",
-            claim_text="The study reports a 12% reduction.",
-            verdict="supported",
-            evidence_chunk_ids=[evidence[0].chunk_id],
-            confidence=0.86,
-            notes="Directly stated in the abstract.",
-        )
-    ]
+def _build_claim_verifications(claims: list[dict[str, Any]]) -> list[ClaimVerification]:
+    return [ClaimVerification(**claim) for claim in claims]
 
 
 def _build_query_response(payload: QueryRequest, graph_state: GraphState, trace_id: str) -> QueryResponse:
@@ -103,7 +96,7 @@ def _build_query_response(payload: QueryRequest, graph_state: GraphState, trace_
         query=payload.query,
         answer=graph_state.draft_answer,
         citations=graph_state.citations,
-        claim_verifications=_build_claim_verifications(graph_state.evidence),
+        claim_verifications=_build_claim_verifications(graph_state.claim_verifications),
         confidence_score=0.78,
         refusal=False,
         trace_id=trace_id,
@@ -121,6 +114,16 @@ def _trace_events_to_payload(events: list[TraceEvent]) -> list[dict[str, Any]]:
         }
         for event in events
     ]
+
+
+def _resolve_search_provider() -> Optional[Any]:
+    bing_key = os.environ.get("BING_API_KEY")
+    serp_key = os.environ.get("SERPAPI_KEY")
+    if bing_key:
+        return BingSearchProvider(bing_key)
+    if serp_key:
+        return SerpApiSearchProvider(serp_key)
+    return None
 
 
 @app.post("/v1/query", response_model=QueryResponse)
@@ -163,7 +166,46 @@ async def query_stream(payload: QueryRequest) -> StreamingResponse:
 
 @app.post("/v1/search", response_model=SearchResponse)
 async def search(payload: SearchRequest) -> SearchResponse:
-    # TODO: Integrate Bing/SerpAPI search + HTML extraction.
+    # TODO: Add provider tuning and result filtering.
+    provider = _resolve_search_provider()
+    if provider is None:
+        raise HTTPException(status_code=500, detail="Search provider API key not configured")
+
+    trace_id = f"trace-{uuid.uuid4().hex[:8]}"
+    search_results = provider.search(payload.query, payload.max_results)
+    trace_events: list[TraceEvent] = [
+        TraceEvent(
+            event_id="evt-search-001",
+            agent="Retriever",
+            event_type="search",
+            timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            payload={"query": payload.query, "result_count": len(search_results)},
+        )
+    ]
+
+    for index, result in enumerate(search_results):
+        extracted = fetch_and_extract(result["url"], result["title"], result.get("published_at"))
+        if not extracted:
+            continue
+        add_web_document(
+            url=extracted.url,
+            title=extracted.title,
+            text=extracted.text,
+            published_at=extracted.published_at,
+            metadata={"source_rank": index, "query": payload.query},
+        )
+        trace_events.append(
+            TraceEvent(
+                event_id=f"evt-extract-{index:03d}",
+                agent="Retriever",
+                event_type="retrieve",
+                timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                payload={"url": extracted.url, "status": "indexed"},
+            )
+        )
+
+    TRACE_STORE.save_trace(trace_id, payload.query, _trace_events_to_payload(trace_events))
+
     rows = pg_search(payload.query, limit=payload.max_results)
     results = [
         SearchResult(

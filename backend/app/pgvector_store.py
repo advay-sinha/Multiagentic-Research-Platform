@@ -158,6 +158,15 @@ def add_document(text: str, filename: str, metadata: Optional[Dict[str, Any]] = 
     }
 
 
+def add_web_document(url: str, title: str, text: str, published_at: Optional[str], metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    safe_metadata = metadata or {}
+    safe_metadata.setdefault("url", url)
+    safe_metadata.setdefault("title", title or url)
+    safe_metadata.setdefault("published_at", published_at or _now())
+    filename = title or url
+    return add_document(text=text, filename=filename, metadata=safe_metadata)
+
+
 def get_document(document_id: str) -> Optional[Dict[str, Any]]:
     with _get_conn() as conn:
         with conn.cursor() as cur:

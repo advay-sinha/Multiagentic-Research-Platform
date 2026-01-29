@@ -9,6 +9,10 @@ from backend.app.main import app
 client = TestClient(app)
 
 
+def _has_web_search_config() -> bool:
+    return bool(os.environ.get("BING_API_KEY") or os.environ.get("SERPAPI_KEY"))
+
+
 @pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set")
 def test_health():
     response = client.get("/v1/health")
@@ -36,3 +40,12 @@ def test_upload_query_trace_flow():
     trace_payload = trace_response.json()
     assert trace_payload["trace_id"] == query_payload["trace_id"]
     assert len(trace_payload["events"]) >= 1
+
+
+@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set")
+@pytest.mark.skipif(not _has_web_search_config(), reason="Search API key not set")
+def test_web_search_indexes_results():
+    response = client.post("/v1/search", json={"query": "latest guidance on X", "max_results": 3})
+    assert response.status_code == 200
+    payload = response.json()
+    assert "results" in payload

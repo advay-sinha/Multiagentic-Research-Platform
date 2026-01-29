@@ -24,6 +24,24 @@ $env:EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 $env:EMBEDDING_DIM = "384"
 ```
 
+## Web search API keys
+
+Set at least one provider key:
+
+```powershell
+$env:BING_API_KEY = "<your-bing-key>"
+# or
+$env:SERPAPI_KEY = "<your-serpapi-key>"
+```
+
+## LLM configuration
+
+```powershell
+$env:LLM_PROVIDER = "openai"  # or "stub"
+$env:OPENAI_API_KEY = "<your-openai-key>"
+$env:OPENAI_MODEL = "gpt-4o-mini"
+```
+
 Run the API:
 
 ```powershell
