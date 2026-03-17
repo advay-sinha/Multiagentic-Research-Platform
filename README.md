@@ -1,5 +1,53 @@
 # Autonomous Agentic Research Platform
 
+## Project tree
+
+```text
+Multiagentic-Research-Platform/
+|-- backend/
+|   |-- app/
+|   |   |-- data/
+|   |   |-- search_providers/
+|   |   |-- __init__.py
+|   |   |-- doc_store.py
+|   |   |-- embeddings.py
+|   |   |-- extraction.py
+|   |   |-- langgraph_stub.py
+|   |   |-- llm_client.py
+|   |   |-- logging_utils.py
+|   |   |-- main.py
+|   |   |-- pgvector_store.py
+|   |   |-- schemas.py
+|   |   |-- settings.py
+|   |   `-- trace_store.py
+|   |-- evals/
+|   |-- tests/
+|   |-- __init__.py
+|   `-- requirements.txt
+|-- docs/
+|   |-- ui-figures/
+|   |-- autonomous-agentic-research-platform-plan.md
+|   |-- testing.md
+|   `-- ui-prototype.md
+|-- frontend/
+|   |-- public/
+|   |-- src/
+|   |-- eslint.config.mjs
+|   |-- next.config.ts
+|   |-- package-lock.json
+|   |-- package.json
+|   |-- README.md
+|   `-- tsconfig.json
+|-- .gitignore
+|-- agents-env.md
+|-- CI_CD_PIPELINE.md
+|-- Dockerfile
+|-- pytest.ini
+|-- README.md
+|-- sample.txt
+`-- sample2.txt
+```
+
 ## Run API locally
 
 ```powershell

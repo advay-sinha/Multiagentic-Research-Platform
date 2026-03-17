@@ -1,11 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import os
+import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from .llm_client import LLMClient
 from .pgvector_store import search as pg_search
+from .settings import load_settings
+
+# Hard cap on agent iterations. Loaded from MAX_AGENT_ITERATIONS env var (default 5).
+MAX_ITERATIONS: int = int(os.environ.get("MAX_AGENT_ITERATIONS", "5"))
 
 
 @dataclass
@@ -35,6 +41,12 @@ class TraceEvent:
 
 
 @dataclass
+class StageLatency:
+    stage: str
+    duration_ms: float
+
+
+@dataclass
 class GraphState:
     query: str
     plan: List[PlanStep]
@@ -45,6 +57,8 @@ class GraphState:
     confidence_score: float
     refusal: bool
     trace_events: List[TraceEvent]
+    stage_latencies: List[StageLatency] = field(default_factory=list)
+    total_duration_ms: float = 0.0
 
 
 class PlannerNode:
@@ -185,6 +199,10 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _ms(start: float) -> float:
+    return round((time.perf_counter() - start) * 1000, 2)
+
+
 def run_graph(query: str, max_sources: int) -> GraphState:
     llm = LLMClient()
     planner = PlannerNode(llm)
@@ -193,7 +211,12 @@ def run_graph(query: str, max_sources: int) -> GraphState:
     critic = CriticNode(llm)
     verifier = VerifierNode(llm)
 
+    graph_start = time.perf_counter()
+    stage_latencies: List[StageLatency] = []
+
+    t = time.perf_counter()
     plan = planner.run(query)
+    stage_latencies.append(StageLatency(stage="planner", duration_ms=_ms(t)))
     plan_event = TraceEvent(
         event_id="evt-plan-001",
         agent="Planner",
@@ -202,8 +225,10 @@ def run_graph(query: str, max_sources: int) -> GraphState:
         payload={"plan": [step.search_query for step in plan]},
     )
 
+    t = time.perf_counter()
     rows = retriever.run(plan, max_results=max_sources)
     evidence = _to_evidence(rows)
+    stage_latencies.append(StageLatency(stage="retriever", duration_ms=_ms(t)))
     retrieval_event = TraceEvent(
         event_id="evt-retrieval-001",
         agent="Retriever",
@@ -215,7 +240,9 @@ def run_graph(query: str, max_sources: int) -> GraphState:
         },
     )
 
+    t = time.perf_counter()
     writer_output = writer.run(query, evidence)
+    stage_latencies.append(StageLatency(stage="writer", duration_ms=_ms(t)))
     writer_event = TraceEvent(
         event_id="evt-writer-001",
         agent="Writer",
@@ -223,7 +250,10 @@ def run_graph(query: str, max_sources: int) -> GraphState:
         timestamp=_now(),
         payload={"citations": len(writer_output["citations"])},
     )
+
+    t = time.perf_counter()
     critique = critic.run(query, writer_output["draft_answer"], evidence)
+    stage_latencies.append(StageLatency(stage="critic", duration_ms=_ms(t)))
     critic_event = TraceEvent(
         event_id="evt-critic-001",
         agent="Critic",
@@ -231,9 +261,12 @@ def run_graph(query: str, max_sources: int) -> GraphState:
         timestamp=_now(),
         payload={"notes": critique[:400]},
     )
+
+    t = time.perf_counter()
     claim_verifications = verifier.run(writer_output["draft_answer"], evidence)
     confidence_score = _derive_confidence(claim_verifications, evidence)
     refusal = confidence_score < 0.4
+    stage_latencies.append(StageLatency(stage="verifier", duration_ms=_ms(t)))
     verifier_event = TraceEvent(
         event_id="evt-verify-001",
         agent="Verifier",
@@ -252,4 +285,6 @@ def run_graph(query: str, max_sources: int) -> GraphState:
         confidence_score=confidence_score,
         refusal=refusal,
         trace_events=[plan_event, retrieval_event, writer_event, critic_event, verifier_event],
+        stage_latencies=stage_latencies,
+        total_duration_ms=_ms(graph_start),
     )

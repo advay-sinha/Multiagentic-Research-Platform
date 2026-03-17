@@ -1,2 +1,46 @@
 ./.venv
-__pycache__
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Claude workspace files
+.claude
+CLAUDE.md
+PLANS.md
+WORKFLOWS.md
+AGENTS.md
+docs/*
+.mcp.json
+
+# Node / Next.js
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+dist/
+build/
+coverage/
+.cache/
+.turbo/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Local data and logs
+*.log
+*.tmp
+*.temp
+*.pid
+*.db
+*.sqlite3

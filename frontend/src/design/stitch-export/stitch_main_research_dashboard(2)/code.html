@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>RAG Analytics Platform - Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#8359f8",
+                        "background-light": "#f6f5f8",
+                        "background-dark": "#0a0812",
+                        "slate-card": "#151022",
+                        "slate-border": "#2c2839",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .chart-gradient { background: linear-gradient(180deg, rgba(131, 89, 248, 0.2) 0%, rgba(131, 89, 248, 0) 100%); }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display">
+<div class="relative flex h-screen w-full overflow-hidden">
+<!-- Sidebar -->
+<aside class="w-64 border-r border-slate-border bg-background-light dark:bg-background-dark flex flex-col">
+<div class="p-6 flex items-center gap-3">
+<div class="size-8 bg-primary rounded flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-xl">analytics</span>
+</div>
+<h1 class="text-lg font-bold tracking-tight">RAG Metrics</h1>
+</div>
+<nav class="flex-1 px-4 space-y-2">
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary font-semibold">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-sm">Dashboard</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-border/50 text-slate-500 dark:text-slate-400">
+<span class="material-symbols-outlined">science</span>
+<span class="text-sm">Experiments</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-border/50 text-slate-500 dark:text-slate-400">
+<span class="material-symbols-outlined">description</span>
+<span class="text-sm">Retrieval Logs</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-border/50 text-slate-500 dark:text-slate-400">
+<span class="material-symbols-outlined">database</span>
+<span class="text-sm">Knowledge Base</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-border/50 text-slate-500 dark:text-slate-400">
+<span class="material-symbols-outlined">shield</span>
+<span class="text-sm">Compliance</span>
+</div>
+</nav>
+<div class="p-4 border-t border-slate-border">
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-border/50 text-slate-500 dark:text-slate-400 cursor-pointer">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-sm">Settings</span>
+</div>
+<div class="mt-4 flex items-center gap-3 px-2">
+<div class="size-8 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="User avatar profile picture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDgGGAUTZAMpptPRhPDCJavA6trfCFScnb7VSJoaLqOOCNXnIhTIQ77cvXAd2T1mLnS0PsaAApGCwhT59BBNNCKYJLRw6VmNwVwcdSi-Wakl2yHipAI4VQGS48zJI0W7L0T2jg9k2dKlC8ibkUDgM8T2eXdsHY09EdnVtSkebe7ga42W1zj-v2cu-cHZiJaKBgt0zTZERDIRkxaLu9z7uNaGYimGQ5ZVjbqo5v-C38MNxG4EkA3PpGyCiSuUmUqlnQQM3_7qaTAUi0"/>
+</div>
+<div class="flex flex-col">
+<span class="text-xs font-bold">Admin User</span>
+<span class="text-[10px] text-slate-500 uppercase tracking-wider">Pro Tier</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 flex flex-col overflow-hidden">
+<!-- Top Bar -->
+<header class="h-16 border-b border-slate-border bg-background-light/50 dark:bg-background-dark/50 backdrop-blur-md flex items-center justify-between px-8">
+<div class="flex items-center gap-4 flex-1">
+<div class="relative w-96">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+<input class="w-full bg-slate-border/30 border-none rounded-lg pl-10 text-sm focus:ring-1 focus:ring-primary h-9" placeholder="Search audit logs or experiments..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="size-9 flex items-center justify-center rounded-lg hover:bg-slate-border/50 text-slate-500">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="h-6 w-px bg-slate-border"></div>
+<div class="flex items-center gap-2 text-sm font-medium text-slate-400">
+<span class="material-symbols-outlined text-sm">history</span>
+                    v2.4.0-audit
+                </div>
+<button class="bg-primary hover:bg-primary/90 text-white px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors">
+                    Export Report
+                </button>
+</div>
+</header>
+<!-- Scrollable Dashboard -->
+<div class="flex-1 overflow-y-auto p-8 space-y-8">
+<!-- Header -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="text-3xl font-black tracking-tight">Performance Overview</h2>
+<p class="text-slate-500 mt-1">Real-time RAG reliability and latency metrics for research clusters.</p>
+</div>
+<div class="flex gap-2">
+<div class="flex bg-slate-border/50 p-1 rounded-lg">
+<button class="px-3 py-1 text-xs font-bold bg-primary text-white rounded-md">24h</button>
+<button class="px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-300">7d</button>
+<button class="px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-300">30d</button>
+</div>
+</div>
+</div>
+<!-- Metric Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+<!-- Faithfulness -->
+<div class="bg-white dark:bg-slate-card p-6 rounded-xl border border-slate-border shadow-sm group hover:border-primary transition-colors">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-primary bg-primary/10 p-2 rounded-lg">verified_user</span>
+<span class="text-emerald-500 text-xs font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">trending_up</span>+1.2%
+                        </span>
+</div>
+<h3 class="text-slate-500 text-sm font-medium">Faithfulness</h3>
+<div class="flex items-baseline gap-2 mt-1">
+<span class="text-3xl font-bold">96%</span>
+<span class="text-slate-500 text-xs">target: 95%</span>
+</div>
+<p class="text-[11px] text-slate-400 mt-3 leading-relaxed">Percentage of claims supported by source documents.</p>
+</div>
+<!-- Citation Coverage -->
+<div class="bg-white dark:bg-slate-card p-6 rounded-xl border border-slate-border shadow-sm group hover:border-primary transition-colors">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-primary bg-primary/10 p-2 rounded-lg">format_quote</span>
+<span class="text-slate-400 text-xs font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">horizontal_rule</span>0.0%
+                        </span>
+</div>
+<h3 class="text-slate-500 text-sm font-medium">Citation Coverage</h3>
+<div class="flex items-baseline gap-2 mt-1">
+<span class="text-3xl font-bold">100%</span>
+<span class="text-slate-500 text-xs">perfect</span>
+</div>
+<p class="text-[11px] text-slate-400 mt-3 leading-relaxed">Ratio of generated statements mapped to citations.</p>
+</div>
+<!-- Hallucination Rate -->
+<div class="bg-white dark:bg-slate-card p-6 rounded-xl border border-slate-border shadow-sm group hover:border-primary transition-colors">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-primary bg-primary/10 p-2 rounded-lg">warning</span>
+<span class="text-emerald-500 text-xs font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">trending_down</span>-0.05%
+                        </span>
+</div>
+<h3 class="text-slate-500 text-sm font-medium">Hallucination Rate</h3>
+<div class="flex items-baseline gap-2 mt-1">
+<span class="text-3xl font-bold">0.2%</span>
+<span class="text-slate-500 text-xs">critical</span>
+</div>
+<p class="text-[11px] text-slate-400 mt-3 leading-relaxed">Detected contradictions against the knowledge base.</p>
+</div>
+<!-- Avg Latency -->
+<div class="bg-white dark:bg-slate-card p-6 rounded-xl border border-slate-border shadow-sm group hover:border-primary transition-colors">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-primary bg-primary/10 p-2 rounded-lg">timer</span>
+<span class="text-emerald-500 text-xs font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">trending_down</span>-0.4s
+                        </span>
+</div>
+<h3 class="text-slate-500 text-sm font-medium">Avg Latency</h3>
+<div class="flex items-baseline gap-2 mt-1">
+<span class="text-3xl font-bold">4.2s</span>
+<span class="text-slate-500 text-xs">p95: 6.1s</span>
+</div>
+<p class="text-[11px] text-slate-400 mt-3 leading-relaxed">End-to-end response time including reranking.</p>
+</div>
+</div>
+<!-- Charts Section -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+<!-- Latency by Stage Bar Chart -->
+<div class="bg-white dark:bg-slate-card border border-slate-border rounded-xl p-8">
+<div class="flex justify-between items-center mb-10">
+<div>
+<h4 class="text-lg font-bold">Latency by Stage</h4>
+<p class="text-slate-500 text-xs">Breakdown of processing time across the RAG pipeline</p>
+</div>
+<div class="text-right">
+<span class="text-2xl font-black text-primary">4.2s</span>
+<span class="block text-[10px] text-slate-500 uppercase font-bold tracking-widest">Global Mean</span>
+</div>
+</div>
+<div class="flex items-end justify-between h-48 gap-4 px-4">
+<div class="flex flex-col items-center gap-3 flex-1">
+<div class="w-full bg-primary/20 rounded-t-lg relative group overflow-hidden" style="height: 90%;">
+<div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-primary to-primary/60 h-full"></div>
+</div>
+<span class="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Planner</span>
+</div>
+<div class="flex flex-col items-center gap-3 flex-1">
+<div class="w-full bg-primary/20 rounded-t-lg relative group overflow-hidden" style="height: 40%;">
+<div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-primary to-primary/60 h-full"></div>
+</div>
+<span class="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Retriever</span>
+</div>
+<div class="flex flex-col items-center gap-3 flex-1">
+<div class="w-full bg-primary/20 rounded-t-lg relative group overflow-hidden" style="height: 60%;">
+<div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-primary to-primary/60 h-full"></div>
+</div>
+<span class="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Reranker</span>
+</div>
+<div class="flex flex-col items-center gap-3 flex-1">
+<div class="w-full bg-primary/20 rounded-t-lg relative group overflow-hidden" style="height: 25%;">
+<div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-primary to-primary/60 h-full"></div>
+</div>
+<span class="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Generator</span>
+</div>
+</div>
+</div>
+<!-- Recall Over Time Line Chart -->
+<div class="bg-white dark:bg-slate-card border border-slate-border rounded-xl p-8">
+<div class="flex justify-between items-center mb-10">
+<div>
+<h4 class="text-lg font-bold">Recall over Time</h4>
+<p class="text-slate-500 text-xs">Retrieval performance stability across historical queries</p>
+</div>
+<div class="text-right">
+<span class="text-2xl font-black text-emerald-500">0.89</span>
+<span class="block text-[10px] text-slate-500 uppercase font-bold tracking-widest">Mean Recall</span>
+</div>
+</div>
+<div class="relative h-48 w-full">
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 100 40">
+<!-- Area background -->
+<path d="M0,35 Q10,10 20,20 T40,15 T60,25 T80,10 T100,20 V40 H0 Z" fill="url(#lineGradient)" opacity="0.2"></path>
+<!-- Line -->
+<path d="M0,35 Q10,10 20,20 T40,15 T60,25 T80,10 T100,20" fill="none" stroke="#8359f8" stroke-linecap="round" stroke-width="0.8"></path>
+<defs>
+<lineargradient id="lineGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#8359f8"></stop>
+<stop offset="100%" stop-color="#8359f8" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+</svg>
+<div class="flex justify-between mt-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+<span>Mon</span>
+<span>Tue</span>
+<span>Wed</span>
+<span>Thu</span>
+<span>Fri</span>
+<span>Sat</span>
+<span>Sun</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Row: Logs & Error Card -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-8">
+<div class="lg:col-span-2 bg-white dark:bg-slate-card border border-slate-border rounded-xl overflow-hidden">
+<div class="p-4 border-b border-slate-border bg-slate-border/20 flex items-center justify-between">
+<h5 class="text-sm font-bold">Recent System Logs</h5>
+<button class="text-xs text-primary font-bold">View Audit Trail</button>
+</div>
+<div class="p-0">
+<table class="w-full text-left text-xs border-collapse">
+<thead>
+<tr class="text-slate-500 border-b border-slate-border">
+<th class="px-6 py-3 font-semibold">Timestamp</th>
+<th class="px-6 py-3 font-semibold">Event</th>
+<th class="px-6 py-3 font-semibold">Status</th>
+<th class="px-6 py-3 font-semibold">Stage</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-border">
+<tr class="hover:bg-slate-border/10 transition-colors">
+<td class="px-6 py-3 text-slate-400">14:22:01</td>
+<td class="px-6 py-3 font-medium">Query Vector Encoding</td>
+<td class="px-6 py-3"><span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px]">Success</span></td>
+<td class="px-6 py-3 text-slate-400">Retriever</td>
+</tr>
+<tr class="hover:bg-slate-border/10 transition-colors">
+<td class="px-6 py-3 text-slate-400">14:21:55</td>
+<td class="px-6 py-3 font-medium">Top-k Document Fetch</td>
+<td class="px-6 py-3"><span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px]">Success</span></td>
+<td class="px-6 py-3 text-slate-400">Retriever</td>
+</tr>
+<tr class="hover:bg-slate-border/10 transition-colors">
+<td class="px-6 py-3 text-slate-400">14:20:12</td>
+<td class="px-6 py-3 font-medium">Chunk Embedding Update</td>
+<td class="px-6 py-3"><span class="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px]">Syncing</span></td>
+<td class="px-6 py-3 text-slate-400">Knowledge Base</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Error State Card -->
+<div class="bg-red-500/5 dark:bg-red-500/10 border border-red-500/20 rounded-xl p-6 flex flex-col justify-between">
+<div>
+<div class="flex items-center gap-2 text-red-500 mb-3">
+<span class="material-symbols-outlined text-lg">error</span>
+<h5 class="text-sm font-bold uppercase tracking-widest">Failed Attempt</h5>
+</div>
+<p class="text-sm font-semibold mb-1">Index Retrieval Failure</p>
+<p class="text-xs text-slate-500 leading-relaxed">
+                            Cluster <span class="text-slate-200 font-mono">retrieval-a-4</span> failed to respond within 5000ms timeout during 'Planner' stage.
+                        </p>
+</div>
+<div class="mt-6 flex gap-2">
+<button class="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-2 rounded-lg transition-colors">
+                            Retry Cluster
+                        </button>
+<button class="px-3 bg-slate-border/50 text-slate-400 hover:text-slate-200 rounded-lg">
+<span class="material-symbols-outlined text-sm pt-1">help</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

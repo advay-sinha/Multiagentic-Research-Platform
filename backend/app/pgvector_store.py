@@ -91,6 +91,14 @@ def add_document(text: str, filename: str, metadata: Optional[Dict[str, Any]] = 
     safe_metadata = metadata or {}
     document_id = safe_metadata.get("document_id") or f"doc-{abs(hash(filename + text)) % (10 ** 8):08d}"
     uploaded_at = safe_metadata.get("uploaded_at") or _now()
+    if not load_settings().database_url:
+        return {
+            "document_id": document_id,
+            "filename": filename,
+            "uploaded_at": uploaded_at,
+            "size_bytes": len(text.encode("utf-8")),
+            "status": "skipped_no_db",
+        }
     url = safe_metadata.get("url") or f"local://{document_id}"
     title = safe_metadata.get("title") or filename
     published_at = safe_metadata.get("published_at") or uploaded_at
@@ -170,6 +178,8 @@ def add_web_document(url: str, title: str, text: str, published_at: Optional[str
 
 
 def get_document(document_id: str) -> Optional[Dict[str, Any]]:
+    if not load_settings().database_url:
+        return None
     with _get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -189,6 +199,8 @@ def get_document(document_id: str) -> Optional[Dict[str, Any]]:
 
 
 def search(query: str, limit: int = 8) -> List[Dict[str, Any]]:
+    if not load_settings().database_url:
+        return []
     embeddings = embed_texts([query])
     query_vector = embeddings[0]
     with _get_conn() as conn:

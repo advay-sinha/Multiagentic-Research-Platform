@@ -10,14 +10,26 @@ class Settings:
     database_url: str
     embedding_model: str
     embedding_dim: int
+    llm_provider: str
+    openai_model: str
+    cors_allow_origin: str
+    max_agent_iterations: int
 
 
 def load_settings() -> Settings:
     database_url = os.environ.get("DATABASE_URL", "")
     embedding_model = os.environ.get("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     embedding_dim = int(os.environ.get("EMBEDDING_DIM", "384"))
+    llm_provider = os.environ.get("LLM_PROVIDER", "stub")
+    openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    cors_allow_origin = os.environ.get("CORS_ALLOW_ORIGIN", "http://localhost:3000")
+    max_agent_iterations = int(os.environ.get("MAX_AGENT_ITERATIONS", "5"))
     return Settings(
         database_url=database_url,
         embedding_model=embedding_model,
         embedding_dim=embedding_dim,
+        llm_provider=llm_provider,
+        openai_model=openai_model,
+        cors_allow_origin=cors_allow_origin,
+        max_agent_iterations=max_agent_iterations,
     )

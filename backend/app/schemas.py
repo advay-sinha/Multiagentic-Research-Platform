@@ -49,6 +49,19 @@ class ClaimVerification(BaseModel):
     notes: str
 
 
+class StageMetrics(BaseModel):
+    stage: str
+    duration_ms: float
+
+
+class QueryMetrics(BaseModel):
+    total_duration_ms: float
+    stages: List[StageMetrics]
+    evidence_count: int
+    citation_count: int
+    claim_count: int
+
+
 class QueryResponse(BaseModel):
     answer_id: str
     query: str
@@ -58,6 +71,7 @@ class QueryResponse(BaseModel):
     confidence_score: float
     refusal: bool
     trace_id: str
+    metrics: QueryMetrics
 
 
 class SearchResult(BaseModel):

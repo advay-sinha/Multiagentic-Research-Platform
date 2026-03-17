@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#8359f8",
+                        "background-light": "#f6f5f8",
+                        "background-dark": "#0a090e",
+                        "surface-dark": "#151022",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(21, 16, 34, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(131, 89, 248, 0.1);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(131, 89, 248, 0.2);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased overflow-hidden h-screen flex flex-col">
+<!-- Top Navigation Bar -->
+<header class="flex items-center justify-between whitespace-nowrap border-b border-primary/20 bg-background-light dark:bg-background-dark px-6 py-3 shrink-0">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-4 text-primary">
+<div class="size-8 flex items-center justify-center bg-primary/10 rounded-lg">
+<span class="material-symbols-outlined text-primary">hub</span>
+</div>
+<h2 class="text-slate-900 dark:text-slate-100 text-lg font-bold leading-tight tracking-tight">RAG Research Platform</h2>
+</div>
+<label class="flex flex-col min-w-40 h-10 max-w-sm">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-full overflow-hidden border border-primary/20">
+<div class="text-slate-400 flex bg-slate-50 dark:bg-surface-dark items-center justify-center pl-4 pr-1">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</div>
+<input class="w-full min-w-0 flex-1 border-none bg-slate-50 dark:bg-surface-dark text-slate-900 dark:text-slate-100 focus:ring-0 text-sm font-normal placeholder:text-slate-400 px-2" placeholder="Search knowledge base..." value=""/>
+</div>
+</label>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex gap-2">
+<button class="flex items-center justify-center rounded-lg h-10 w-10 bg-slate-50 dark:bg-surface-dark text-slate-600 dark:text-slate-300 border border-primary/10 hover:border-primary/40">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<button class="flex items-center justify-center rounded-lg h-10 w-10 bg-slate-50 dark:bg-surface-dark text-slate-600 dark:text-slate-300 border border-primary/10 hover:border-primary/40">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+</button>
+</div>
+<div class="bg-primary/20 border border-primary/30 rounded-full h-10 w-10 flex items-center justify-center overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="User avatar illustration" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZ5xS8epx7jst9Elyt6VKylvcngnwamg9528IbbPXStX_jY-jeNdIBDLr3RZUFuwrVIteiVjw8lJw5nWbhnkFtIxwwRxcUpf_naD1vMm6xFUXISWvxV1egEvSRxpC5Egy2qGhD9K_Hb4dsGtDoLviaWfGv6zpQCntjUborChJJXWejB04AXO6PAd4pm_gfpv6i0XTvE8HgdtHYsuYPlrG4eLMtoc1NMFBHkn-Su4moep3Rz_VEK_SUkCKHPvKBA0xvmK-YikKJYD8"/>
+</div>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<!-- Sidebar -->
+<aside class="w-64 border-r border-primary/10 bg-background-light dark:bg-background-dark flex flex-col shrink-0">
+<div class="p-6">
+<div class="mb-8">
+<h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Workspace</h3>
+<div class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-primary/10 hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">grid_view</span>
+<span class="text-sm font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-primary/10 hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">manage_search</span>
+<span class="text-sm font-medium">Research</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">database</span>
+<span class="text-sm font-medium">Sources &amp; Data</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-primary/10 hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">fact_check</span>
+<span class="text-sm font-medium">Verification</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-primary/10 hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">history</span>
+<span class="text-sm font-medium">History</span>
+</a>
+</div>
+</div>
+<div class="mt-auto">
+<div class="rounded-xl p-4 bg-primary/5 border border-primary/10">
+<p class="text-xs text-slate-400 mb-2">Active Session</p>
+<p class="text-sm font-bold text-slate-900 dark:text-slate-100">Project Alpha-7</p>
+<div class="mt-3 w-full bg-primary/10 h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-2/3"></div>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-background-dark/50">
+<!-- Breadcrumbs & Actions -->
+<div class="px-8 py-4 flex items-center justify-between border-b border-primary/10 shrink-0 bg-white/50 dark:bg-surface-dark/30 backdrop-blur-md">
+<div class="flex items-center gap-4">
+<h1 class="text-xl font-bold tracking-tight">Source Verification Analysis</h1>
+<span class="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-mono">ID: QA-7821</span>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-primary/20 text-sm font-medium hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined text-[18px]">download</span> Export Report
+                    </button>
+<button class="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-primary text-white text-sm font-bold shadow-lg shadow-primary/20 hover:brightness-110">
+<span class="material-symbols-outlined text-[18px]">refresh</span> Re-verify
+                    </button>
+</div>
+</div>
+<div class="flex flex-1 overflow-hidden p-6 gap-6">
+<!-- Left Column: Retrieved Sources -->
+<div class="w-1/3 flex flex-col gap-4 min-w-[380px]">
+<div class="flex items-center justify-between px-2">
+<h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Retrieved Sources (4)</h2>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-slate-400">filter_list</span>
+<span class="material-symbols-outlined text-[18px] text-slate-400">sort</span>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4 pr-2">
+<!-- Source Card 1 -->
+<div class="glass-card rounded-xl p-4 hover:border-primary/40 transition-all cursor-pointer group">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">#S01</span>
+<span class="text-[10px] font-bold uppercase bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded">PDF</span>
+</div>
+<div class="flex items-center gap-1 text-emerald-500">
+<span class="text-xs font-bold">0.98</span>
+<span class="material-symbols-outlined text-[14px]">analytics</span>
+</div>
+</div>
+<h3 class="font-bold text-sm mb-2 group-hover:text-primary transition-colors">Technical Analysis of GPT-4 Architecture</h3>
+<p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 mb-3 leading-relaxed">
+                                ...the attention mechanism scales quadratically with sequence length, necessitating sparse attention patterns for long context windows...
+                            </p>
+<div class="flex items-center justify-between text-[10px] text-slate-500">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">calendar_today</span> Oct 12, 2023</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">folder</span> Architecture</span>
+</div>
+</div>
+<!-- Source Card 2 -->
+<div class="glass-card rounded-xl p-4 border-l-4 border-l-primary bg-primary/5 hover:border-primary/40 transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">#S02</span>
+<span class="text-[10px] font-bold uppercase bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded">URL</span>
+</div>
+<div class="flex items-center gap-1 text-emerald-500">
+<span class="text-xs font-bold">0.94</span>
+<span class="material-symbols-outlined text-[14px]">analytics</span>
+</div>
+</div>
+<h3 class="font-bold text-sm mb-2 text-primary">Dense vs. Sparse Training Efficiency</h3>
+<p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 mb-3 leading-relaxed">
+                                Sparse MoE layers allow for significantly higher parameter counts while maintaining similar compute costs per token during inference...
+                            </p>
+<div class="flex items-center justify-between text-[10px] text-slate-500">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">language</span> arxiv.org/2301...</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">calendar_today</span> Jan 05, 2024</span>
+</div>
+</div>
+<!-- Source Card 3 -->
+<div class="glass-card rounded-xl p-4 hover:border-primary/40 transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">#S03</span>
+<span class="text-[10px] font-bold uppercase bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded">DOCX</span>
+</div>
+<div class="flex items-center gap-1 text-amber-500">
+<span class="text-xs font-bold">0.82</span>
+<span class="material-symbols-outlined text-[14px]">analytics</span>
+</div>
+</div>
+<h3 class="font-bold text-sm mb-2">Internal Benchmark Report Q4</h3>
+<p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 mb-3 leading-relaxed">
+                                Testing on 32k context lengths showed a 15% reduction in perplexity when using the optimized sliding window attention pattern...
+                            </p>
+<div class="flex items-center justify-between text-[10px] text-slate-500">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">calendar_today</span> Dec 15, 2023</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">lock</span> Confidential</span>
+</div>
+</div>
+<!-- Source Card 4 -->
+<div class="glass-card rounded-xl p-4 hover:border-primary/40 transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">#S04</span>
+<span class="text-[10px] font-bold uppercase bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded">URL</span>
+</div>
+<div class="flex items-center gap-1 text-slate-400">
+<span class="text-xs font-bold">0.68</span>
+<span class="material-symbols-outlined text-[14px]">analytics</span>
+</div>
+</div>
+<h3 class="font-bold text-sm mb-2">Scaling Laws for Large Language Models</h3>
+<p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 mb-3 leading-relaxed">
+                                Performance scales predictably with dataset size, compute budget, and parameter count across multiple orders of magnitude...
+                            </p>
+<div class="flex items-center justify-between text-[10px] text-slate-500">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">language</span> deepmind.com/...</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">calendar_today</span> Mar 22, 2022</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Verification Table -->
+<div class="flex-1 flex flex-col gap-4 overflow-hidden">
+<div class="flex items-center justify-between px-2 shrink-0">
+<div class="flex items-center gap-4">
+<h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Verification Table</h2>
+<div class="flex gap-2">
+<div class="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded text-[10px] font-bold">
+<span class="size-1.5 rounded-full bg-emerald-500"></span> 12 Supported
+                                </div>
+<div class="flex items-center gap-1 bg-rose-500/10 text-rose-500 px-2 py-0.5 rounded text-[10px] font-bold">
+<span class="size-1.5 rounded-full bg-rose-500"></span> 2 Unsupported
+                                </div>
+<div class="flex items-center gap-1 bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded text-[10px] font-bold">
+<span class="size-1.5 rounded-full bg-amber-500"></span> 1 Partial
+                                </div>
+</div>
+</div>
+<button class="text-xs font-bold text-primary hover:underline">Download CSV</button>
+</div>
+<div class="flex-1 overflow-hidden glass-card rounded-xl border border-primary/20 flex flex-col">
+<div class="grid grid-cols-12 gap-0 border-b border-primary/10 bg-slate-900/40 text-[11px] font-bold text-slate-400 uppercase tracking-tight shrink-0">
+<div class="col-span-3 p-4 border-r border-primary/10">Claim</div>
+<div class="col-span-5 p-4 border-r border-primary/10">Evidence Chunk</div>
+<div class="col-span-1 p-4 border-r border-primary/10 text-center">SRC</div>
+<div class="col-span-3 p-4">Status</div>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar">
+<!-- Row 1 -->
+<div class="grid grid-cols-12 gap-0 border-b border-primary/5 hover:bg-primary/5 transition-colors">
+<div class="col-span-3 p-4 border-r border-primary/10 text-xs leading-relaxed font-medium">
+                                    GPT-4 utilizes a sparse attention pattern for long context.
+                                </div>
+<div class="col-span-5 p-4 border-r border-primary/10 text-xs leading-relaxed italic text-slate-400 bg-slate-50/5">
+                                    "...necessitating sparse attention patterns for long context windows in the GPT-4 architecture..."
+                                </div>
+<div class="col-span-1 p-4 border-r border-primary/10 flex items-center justify-center">
+<span class="font-mono text-[10px] px-2 py-0.5 bg-primary/10 rounded">S01</span>
+</div>
+<div class="col-span-3 p-4 flex items-center">
+<span class="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold border border-emerald-500/20">
+<span class="material-symbols-outlined text-[14px]">check_circle</span> Supported
+                                    </span>
+</div>
+</div>
+<!-- Row 2 -->
+<div class="grid grid-cols-12 gap-0 border-b border-primary/5 hover:bg-primary/5 transition-colors">
+<div class="col-span-3 p-4 border-r border-primary/10 text-xs leading-relaxed font-medium">
+                                    Sparse MoE layers increase parameter count without adding compute.
+                                </div>
+<div class="col-span-5 p-4 border-r border-primary/10 text-xs leading-relaxed italic text-slate-400 bg-slate-50/5">
+                                    "Sparse MoE layers allow for significantly higher parameter counts while maintaining similar compute costs..."
+                                </div>
+<div class="col-span-1 p-4 border-r border-primary/10 flex items-center justify-center">
+<span class="font-mono text-[10px] px-2 py-0.5 bg-primary/10 rounded">S02</span>
+</div>
+<div class="col-span-3 p-4 flex items-center">
+<span class="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold border border-emerald-500/20">
+<span class="material-symbols-outlined text-[14px]">check_circle</span> Supported
+                                    </span>
+</div>
+</div>
+<!-- Row 3 -->
+<div class="grid grid-cols-12 gap-0 border-b border-primary/5 hover:bg-primary/5 transition-colors">
+<div class="col-span-3 p-4 border-r border-primary/10 text-xs leading-relaxed font-medium">
+                                    Sliding window attention reduced perplexity by over 25%.
+                                </div>
+<div class="col-span-5 p-4 border-r border-primary/10 text-xs leading-relaxed italic text-slate-400 bg-slate-50/5">
+                                    "Testing... showed a 15% reduction in perplexity when using optimized sliding window attention..."
+                                </div>
+<div class="col-span-1 p-4 border-r border-primary/10 flex items-center justify-center">
+<span class="font-mono text-[10px] px-2 py-0.5 bg-primary/10 rounded">S03</span>
+</div>
+<div class="col-span-3 p-4 flex items-center">
+<span class="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-bold border border-amber-500/20">
+<span class="material-symbols-outlined text-[14px]">warning</span> Partial Match
+                                    </span>
+</div>
+</div>
+<!-- Row 4 -->
+<div class="grid grid-cols-12 gap-0 border-b border-primary/5 hover:bg-primary/5 transition-colors">
+<div class="col-span-3 p-4 border-r border-primary/10 text-xs leading-relaxed font-medium">
+                                    The model achieves near-zero hallucination rates in medical tasks.
+                                </div>
+<div class="col-span-5 p-4 border-r border-primary/10 text-xs leading-relaxed italic text-rose-400 bg-rose-500/5">
+                                    No matching evidence found in the retrieved document set regarding medical task zero-hallucination.
+                                </div>
+<div class="col-span-1 p-4 border-r border-primary/10 flex items-center justify-center">
+<span class="font-mono text-[10px] px-2 py-0.5 bg-slate-800 rounded">N/A</span>
+</div>
+<div class="col-span-3 p-4 flex items-center">
+<span class="flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 text-rose-500 text-[10px] font-bold border border-rose-500/20">
+<span class="material-symbols-outlined text-[14px]">cancel</span> Unsupported
+                                    </span>
+</div>
+</div>
+<!-- Row 5 -->
+<div class="grid grid-cols-12 gap-0 border-b border-primary/5 hover:bg-primary/5 transition-colors">
+<div class="col-span-3 p-4 border-r border-primary/10 text-xs leading-relaxed font-medium">
+                                    Performance scales linearly with the number of training tokens.
+                                </div>
+<div class="col-span-5 p-4 border-r border-primary/10 text-xs leading-relaxed italic text-slate-400 bg-slate-50/5">
+                                    "Performance scales predictably with dataset size, compute budget, and parameter count..."
+                                </div>
+<div class="col-span-1 p-4 border-r border-primary/10 flex items-center justify-center">
+<span class="font-mono text-[10px] px-2 py-0.5 bg-primary/10 rounded">S04</span>
+</div>
+<div class="col-span-3 p-4 flex items-center">
+<span class="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold border border-emerald-500/20">
+<span class="material-symbols-outlined text-[14px]">check_circle</span> Supported
+                                    </span>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer Details -->
+<div class="glass-card rounded-xl p-4 flex items-center justify-between shrink-0">
+<div class="flex gap-6">
+<div class="flex flex-col">
+<span class="text-[10px] uppercase font-bold text-slate-500">Total Tokens</span>
+<span class="text-sm font-mono">1,248,390</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] uppercase font-bold text-slate-500">Latency</span>
+<span class="text-sm font-mono">2.4s</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] uppercase font-bold text-slate-500">Accuracy Score</span>
+<span class="text-sm font-mono text-emerald-500">94.2%</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-xs text-slate-400">Model: GPT-4-Research-Turbo</span>
+<span class="material-symbols-outlined text-primary text-[18px]">info</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

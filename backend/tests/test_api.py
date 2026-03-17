@@ -13,13 +13,25 @@ def _has_web_search_config() -> bool:
     return bool(os.environ.get("BING_API_KEY") or os.environ.get("SERPAPI_KEY"))
 
 
-@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set")
 def test_health():
     response = client.get("/v1/health")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
     assert data["version"] == "0.1.0"
+
+
+def test_query_stub_mode():
+    """Query endpoint works in stub mode without DATABASE_URL or API keys."""
+    response = client.post("/v1/query", json={"query": "What is quantum computing?"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["trace_id"].startswith("trace-")
+    assert isinstance(data["answer"], str)
+    assert isinstance(data["citations"], list)
+    assert isinstance(data["claim_verifications"], list)
+    assert "confidence_score" in data
+    assert "metrics" in data
 
 
 @pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set")

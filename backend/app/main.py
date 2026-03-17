@@ -4,6 +4,7 @@ import json
 import os
 import time
 import uuid
+from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator, Dict, Iterable, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -14,38 +15,57 @@ from .extraction import fetch_and_extract
 from .langgraph_stub import GraphState, TraceEvent, run_graph
 from .logging_utils import log_event, setup_logging
 from .pgvector_store import add_document, add_web_document, get_document, init_db, search as pg_search
-from .search_providers.bing import BingSearchProvider
-from .search_providers.serpapi import SerpApiSearchProvider
 from .schemas import (
     AgentTraceEvent,
     ClaimVerification,
     DocumentMetadataResponse,
     DocumentUploadResponse,
     HealthResponse,
+    QueryMetrics,
     QueryRequest,
     QueryResponse,
     SearchRequest,
     SearchResponse,
     SearchResult,
+    StageMetrics,
     TraceResponse,
 )
+from .search_providers.bing import BingSearchProvider
+from .search_providers.serpapi import SerpApiSearchProvider
+from .settings import load_settings
 from .trace_store import TRACE_STORE
 
-app = FastAPI(title="Autonomous Agentic Research Platform", version="0.1.0")
 logger = setup_logging()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings = load_settings()
+    log_event(
+        logger,
+        {
+            "event": "startup",
+            "version": "0.1.0",
+            "database": "configured" if settings.database_url else "not configured (in-memory fallback active)",
+            "llm_provider": settings.llm_provider,
+            "embedding_model": settings.embedding_model,
+            "max_agent_iterations": settings.max_agent_iterations,
+            "search_provider": "bing" if os.environ.get("BING_API_KEY") else ("serpapi" if os.environ.get("SERPAPI_KEY") else "none"),
+        },
+    )
+    init_db()
+    yield
+
+
+app = FastAPI(title="Autonomous Agentic Research Platform", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.environ.get("CORS_ALLOW_ORIGIN", "http://localhost:3000")],
+    allow_origins=[load_settings().cors_allow_origin],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    init_db()
 
 
 @app.middleware("http")
@@ -99,6 +119,16 @@ def _build_claim_verifications(claims: list[dict[str, Any]]) -> list[ClaimVerifi
     return [ClaimVerification(**claim) for claim in claims]
 
 
+def _build_metrics(graph_state: GraphState) -> QueryMetrics:
+    return QueryMetrics(
+        total_duration_ms=graph_state.total_duration_ms,
+        stages=[StageMetrics(stage=s.stage, duration_ms=s.duration_ms) for s in graph_state.stage_latencies],
+        evidence_count=len(graph_state.evidence),
+        citation_count=len(graph_state.citations),
+        claim_count=len(graph_state.claim_verifications),
+    )
+
+
 def _build_query_response(payload: QueryRequest, graph_state: GraphState, trace_id: str) -> QueryResponse:
     return QueryResponse(
         answer_id=f"ans-{uuid.uuid4().hex[:8]}",
@@ -109,6 +139,7 @@ def _build_query_response(payload: QueryRequest, graph_state: GraphState, trace_
         confidence_score=graph_state.confidence_score,
         refusal=graph_state.refusal,
         trace_id=trace_id,
+        metrics=_build_metrics(graph_state),
     )
 
 
@@ -178,7 +209,10 @@ async def search(payload: SearchRequest) -> SearchResponse:
     # TODO: Add provider tuning and result filtering.
     provider = _resolve_search_provider()
     if provider is None:
-        raise HTTPException(status_code=500, detail="Search provider API key not configured")
+        raise HTTPException(
+            status_code=503,
+            detail="No search provider configured. Set BING_API_KEY or SERPAPI_KEY to enable /v1/search.",
+        )
 
     trace_id = f"trace-{uuid.uuid4().hex[:8]}"
     search_results = provider.search(payload.query, payload.max_results)
