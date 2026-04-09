@@ -13,6 +13,23 @@ def _has_web_search_config() -> bool:
     return bool(os.environ.get("BING_API_KEY") or os.environ.get("SERPAPI_KEY"))
 
 
+def _has_pgvector() -> bool:
+    """Return True only if DATABASE_URL is set AND pgvector extension is installed."""
+    db_url = os.environ.get("DATABASE_URL", "")
+    if not db_url:
+        return False
+    try:
+        import psycopg2
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
+        row = cur.fetchone()
+        conn.close()
+        return row is not None
+    except Exception:
+        return False
+
+
 def test_health():
     response = client.get("/v1/health")
     assert response.status_code == 200
@@ -22,19 +39,20 @@ def test_health():
 
 
 def test_query_stub_mode():
-    """Query endpoint works in stub mode without DATABASE_URL or API keys."""
+    """Query endpoint returns a well-formed response regardless of LLM/DB availability."""
     response = client.post("/v1/query", json={"query": "What is quantum computing?"})
     assert response.status_code == 200
     data = response.json()
     assert data["trace_id"].startswith("trace-")
     assert isinstance(data["answer"], str)
+    assert len(data["answer"]) > 0
     assert isinstance(data["citations"], list)
     assert isinstance(data["claim_verifications"], list)
     assert "confidence_score" in data
     assert "metrics" in data
 
 
-@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set")
+@pytest.mark.skipif(not _has_pgvector(), reason="pgvector extension not installed on DATABASE_URL")
 def test_upload_query_trace_flow():
     files = {"file": ("sample.txt", b"Sample content for retrieval.")}
     response = client.post("/v1/documents", files=files)
@@ -54,7 +72,7 @@ def test_upload_query_trace_flow():
     assert len(trace_payload["events"]) >= 1
 
 
-@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set")
+@pytest.mark.skipif(not _has_pgvector(), reason="pgvector extension not installed on DATABASE_URL")
 @pytest.mark.skipif(not _has_web_search_config(), reason="Search API key not set")
 def test_web_search_indexes_results():
     response = client.post("/v1/search", json={"query": "latest guidance on X", "max_results": 3})

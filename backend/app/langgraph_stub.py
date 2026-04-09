@@ -11,7 +11,7 @@ from .pgvector_store import search as pg_search
 from .settings import load_settings
 
 # Hard cap on agent iterations. Loaded from MAX_AGENT_ITERATIONS env var (default 5).
-MAX_ITERATIONS: int = int(os.environ.get("MAX_AGENT_ITERATIONS", "5"))
+MAX_ITERATIONS: int = int(os.environ.get("MAX_AGENT_ITERATIONS") or "5")
 
 
 @dataclass
@@ -66,14 +66,30 @@ class PlannerNode:
         self._llm = llm
 
     def run(self, query: str) -> List[PlanStep]:
-        # TODO: Replace with structured planning output.
         prompt = (
-            "Create a minimal retrieval plan for the query. "
-            "Return a short search query string."
+            "Create a retrieval plan for the query. "
+            "Return a JSON array of objects with 'question' and 'search_query' fields. "
+            "Keep it to 1-3 steps. Example: "
+            '[{"question": "...", "search_query": "..."}]'
         )
-        search_query = self._llm.generate(prompt=prompt, user_content=query).strip()
-        if not search_query:
-            search_query = f"{query} evidence"
+        raw = self._llm.generate(prompt=prompt, user_content=query).strip()
+        # Try to parse structured JSON output from the LLM
+        try:
+            import json as _json
+            parsed = _json.loads(raw)
+            if isinstance(parsed, list) and parsed:
+                return [
+                    PlanStep(
+                        question=s.get("question", query),
+                        search_query=s.get("search_query", query),
+                    )
+                    for s in parsed[:3]
+                    if isinstance(s, dict)
+                ] or [PlanStep(question=f"Key points for: {query}", search_query=raw)]
+        except (ValueError, TypeError, AttributeError):
+            pass
+        # Fallback: treat raw LLM output as a single search query
+        search_query = raw if raw else f"{query} evidence"
         return [PlanStep(question=f"Key points for: {query}", search_query=search_query)]
 
 
@@ -89,7 +105,6 @@ class WriterNode:
         self._llm = llm
 
     def run(self, query: str, evidence: List[EvidenceChunk]) -> Dict[str, Any]:
-        # TODO: Improve citation mapping with explicit span alignment.
         evidence_blocks = []
         for chunk in evidence:
             evidence_blocks.append(
@@ -108,7 +123,17 @@ class WriterNode:
                 answer = f"No indexed sources matched the query: {query}"
 
         citations = []
+        answer_lower = answer.lower()
         for index, chunk in enumerate(evidence):
+            snippet = chunk.text[:200]
+            # Best-effort span alignment: find snippet text in the answer
+            span_start = None
+            span_end = None
+            pos = answer_lower.find(snippet[:60].lower())
+            if pos >= 0:
+                span_start = pos
+                span_end = pos + len(snippet[:60])
+
             citations.append(
                 {
                     "citation_id": f"cit-{index:03d}",
@@ -116,9 +141,11 @@ class WriterNode:
                     "title": chunk.metadata.get("title", "Untitled"),
                     "url": chunk.metadata.get("url", ""),
                     "published_at": chunk.metadata.get("published_at", ""),
-                    "snippet": chunk.text[:200],
+                    "snippet": snippet,
                     "chunk_start": chunk.chunk_start,
                     "chunk_end": chunk.chunk_end,
+                    "answer_span_start": span_start,
+                    "answer_span_end": span_end,
                 }
             )
 
@@ -144,16 +171,45 @@ class VerifierNode:
         self._llm = llm
 
     def run(self, answer: str, evidence: List[EvidenceChunk]) -> List[Dict[str, Any]]:
-        # TODO: Replace heuristic verification with claim-level alignment.
         if not answer or not evidence:
             return []
         prompt = (
-            "Identify up to 2 key claims from the answer and label them as "
-            "supported or unsupported based on the evidence."
+            "Identify up to 3 key claims from the answer. For each claim, return a JSON array: "
+            '[{"claim_text": "...", "verdict": "supported"|"unsupported"|"partial", '
+            '"confidence": 0.0-1.0, "notes": "brief justification"}]. '
+            "Base verdicts strictly on the provided evidence."
         )
-        evidence_ids = [chunk.chunk_id for chunk in evidence[:2]]
-        verdict = self._llm.generate(prompt=prompt, user_content=answer)
-        verdict_label = "supported" if "unsupported" not in verdict.lower() else "unsupported"
+        evidence_context = "\n".join(f"[{c.chunk_id}] {c.text[:300]}" for c in evidence[:4])
+        raw = self._llm.generate(
+            prompt=prompt,
+            user_content=f"Answer: {answer}\n\nEvidence:\n{evidence_context}",
+        )
+        evidence_ids = [chunk.chunk_id for chunk in evidence[:4]]
+
+        # Try to parse structured JSON claims from the LLM
+        try:
+            import json as _json
+            parsed = _json.loads(raw)
+            if isinstance(parsed, list) and parsed:
+                claims = []
+                for i, item in enumerate(parsed[:3]):
+                    if not isinstance(item, dict):
+                        continue
+                    claims.append({
+                        "claim_id": f"clm-{i + 1:03d}",
+                        "claim_text": str(item.get("claim_text", answer[:120])),
+                        "verdict": str(item.get("verdict", "supported")).lower(),
+                        "evidence_chunk_ids": evidence_ids,
+                        "confidence": float(item.get("confidence", 0.66)),
+                        "notes": str(item.get("notes", "")),
+                    })
+                if claims:
+                    return claims
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+        # Fallback: heuristic single-claim verdict
+        verdict_label = "supported" if "unsupported" not in raw.lower() else "unsupported"
         return [
             {
                 "claim_id": "clm-001",
@@ -161,7 +217,7 @@ class VerifierNode:
                 "verdict": verdict_label,
                 "evidence_chunk_ids": evidence_ids,
                 "confidence": 0.66,
-                "notes": verdict or "Heuristic verification.",
+                "notes": raw or "Heuristic verification.",
             }
         ]
 
@@ -213,23 +269,26 @@ def run_graph(query: str, max_sources: int) -> GraphState:
 
     graph_start = time.perf_counter()
     stage_latencies: List[StageLatency] = []
+    trace_events: List[TraceEvent] = []
 
+    # ── Planner (single pass) ────────────────────────────────────────────────
     t = time.perf_counter()
     plan = planner.run(query)
     stage_latencies.append(StageLatency(stage="planner", duration_ms=_ms(t)))
-    plan_event = TraceEvent(
+    trace_events.append(TraceEvent(
         event_id="evt-plan-001",
         agent="Planner",
         event_type="plan",
         timestamp=_now(),
         payload={"plan": [step.search_query for step in plan]},
-    )
+    ))
 
+    # ── Retriever (single pass) ──────────────────────────────────────────────
     t = time.perf_counter()
     rows = retriever.run(plan, max_results=max_sources)
     evidence = _to_evidence(rows)
     stage_latencies.append(StageLatency(stage="retriever", duration_ms=_ms(t)))
-    retrieval_event = TraceEvent(
+    trace_events.append(TraceEvent(
         event_id="evt-retrieval-001",
         agent="Retriever",
         event_type="retrieve",
@@ -238,42 +297,59 @@ def run_graph(query: str, max_sources: int) -> GraphState:
             "query": plan[0].search_query if plan else query,
             "result_count": len(evidence),
         },
-    )
+    ))
 
-    t = time.perf_counter()
-    writer_output = writer.run(query, evidence)
-    stage_latencies.append(StageLatency(stage="writer", duration_ms=_ms(t)))
-    writer_event = TraceEvent(
-        event_id="evt-writer-001",
-        agent="Writer",
-        event_type="write",
-        timestamp=_now(),
-        payload={"citations": len(writer_output["citations"])},
-    )
+    # ── Writer → Critic → Verifier loop (up to MAX_ITERATIONS) ──────────────
+    # Iterates until confidence is sufficient or iteration cap is reached.
+    writer_output: Dict[str, Any] = {"draft_answer": "", "citations": []}
+    claim_verifications: List[Dict[str, Any]] = []
+    confidence_score = 0.0
+    refusal = True
 
-    t = time.perf_counter()
-    critique = critic.run(query, writer_output["draft_answer"], evidence)
-    stage_latencies.append(StageLatency(stage="critic", duration_ms=_ms(t)))
-    critic_event = TraceEvent(
-        event_id="evt-critic-001",
-        agent="Critic",
-        event_type="critique",
-        timestamp=_now(),
-        payload={"notes": critique[:400]},
-    )
+    for iteration in range(MAX_ITERATIONS):
+        t = time.perf_counter()
+        writer_output = writer.run(query, evidence)
+        stage_latencies.append(StageLatency(stage="writer", duration_ms=_ms(t)))
+        trace_events.append(TraceEvent(
+            event_id=f"evt-writer-{iteration + 1:03d}",
+            agent="Writer",
+            event_type="write",
+            timestamp=_now(),
+            payload={"iteration": iteration + 1, "citations": len(writer_output["citations"])},
+        ))
 
-    t = time.perf_counter()
-    claim_verifications = verifier.run(writer_output["draft_answer"], evidence)
-    confidence_score = _derive_confidence(claim_verifications, evidence)
-    refusal = confidence_score < 0.4
-    stage_latencies.append(StageLatency(stage="verifier", duration_ms=_ms(t)))
-    verifier_event = TraceEvent(
-        event_id="evt-verify-001",
-        agent="Verifier",
-        event_type="verify",
-        timestamp=_now(),
-        payload={"claim_count": len(claim_verifications), "confidence_score": confidence_score, "refusal": refusal},
-    )
+        t = time.perf_counter()
+        critique = critic.run(query, writer_output["draft_answer"], evidence)
+        stage_latencies.append(StageLatency(stage="critic", duration_ms=_ms(t)))
+        trace_events.append(TraceEvent(
+            event_id=f"evt-critic-{iteration + 1:03d}",
+            agent="Critic",
+            event_type="critique",
+            timestamp=_now(),
+            payload={"iteration": iteration + 1, "notes": critique[:400]},
+        ))
+
+        t = time.perf_counter()
+        claim_verifications = verifier.run(writer_output["draft_answer"], evidence)
+        confidence_score = _derive_confidence(claim_verifications, evidence)
+        refusal = confidence_score < 0.4
+        stage_latencies.append(StageLatency(stage="verifier", duration_ms=_ms(t)))
+        trace_events.append(TraceEvent(
+            event_id=f"evt-verify-{iteration + 1:03d}",
+            agent="Verifier",
+            event_type="verify",
+            timestamp=_now(),
+            payload={
+                "iteration": iteration + 1,
+                "claim_count": len(claim_verifications),
+                "confidence_score": confidence_score,
+                "refusal": refusal,
+            },
+        ))
+
+        # Stop early when confidence is sufficient
+        if not refusal:
+            break
 
     return GraphState(
         query=query,
@@ -284,7 +360,7 @@ def run_graph(query: str, max_sources: int) -> GraphState:
         claim_verifications=claim_verifications,
         confidence_score=confidence_score,
         refusal=refusal,
-        trace_events=[plan_event, retrieval_event, writer_event, critic_event, verifier_event],
+        trace_events=trace_events,
         stage_latencies=stage_latencies,
         total_duration_ms=_ms(graph_start),
     )

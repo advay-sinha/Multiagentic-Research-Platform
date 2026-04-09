@@ -9,7 +9,7 @@ class QueryOptions(BaseModel):
     stream: bool = False
     max_sources: int = Field(default=8, ge=1, le=25)
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
-    embedding_model: str = "text-embedding-3-large"
+    embedding_model: str = "models/gemini-embedding-001"
     search_provider: str = "bing"
     enable_verifier: bool = True
 
@@ -38,6 +38,8 @@ class Citation(BaseModel):
     snippet: str
     chunk_start: int
     chunk_end: int
+    answer_span_start: Optional[int] = None
+    answer_span_end: Optional[int] = None
 
 
 class ClaimVerification(BaseModel):

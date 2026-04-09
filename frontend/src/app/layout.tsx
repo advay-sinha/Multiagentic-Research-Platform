@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Autonomous RAG Research Platform",
+  title: "Autonomous Multi-Agentic Research Platform",
   description: "Evidence-grounded multi-agent research with citations, verification, and traces.",
 };
 

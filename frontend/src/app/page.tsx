@@ -13,6 +13,8 @@ type Citation = {
   snippet: string;
   chunk_start: number;
   chunk_end: number;
+  answer_span_start?: number;
+  answer_span_end?: number;
 };
 
 type TraceEvent = {
@@ -653,7 +655,15 @@ export default function Home() {
       });
 
       if (!response.ok || !response.body) {
-        throw new Error(`Stream request failed (${response.status})`);
+        let detail = `Stream request failed (${response.status})`;
+        try {
+          const errJson = await response.clone().json();
+          if (errJson?.detail) detail = String(errJson.detail);
+          else if (errJson?.error?.message) detail = String(errJson.error.message);
+        } catch {
+          // non-JSON error body — keep generic message
+        }
+        throw new Error(detail);
       }
 
       const reader = response.body.getReader();

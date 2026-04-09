@@ -7,6 +7,10 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator, Dict, Iterable, Optional
 
+from dotenv import load_dotenv
+
+load_dotenv()  # Load .env before any settings or env-var reads
+
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -50,7 +54,7 @@ async def lifespan(app: FastAPI):
             "llm_provider": settings.llm_provider,
             "embedding_model": settings.embedding_model,
             "max_agent_iterations": settings.max_agent_iterations,
-            "search_provider": "bing" if os.environ.get("BING_API_KEY") else ("serpapi" if os.environ.get("SERPAPI_KEY") else "none"),
+            "search_provider": "bing" if os.environ.get("BING_API_KEY") else ("serpapi (google+bing)" if os.environ.get("SERPAPI_KEY") else "none"),
         },
     )
     init_db()
@@ -156,13 +160,34 @@ def _trace_events_to_payload(events: list[TraceEvent]) -> list[dict[str, Any]]:
     ]
 
 
-def _resolve_search_provider() -> Optional[Any]:
+def _resolve_search_provider(preferred: str = "auto") -> Optional[Any]:
+    """Return the best available search provider.
+
+    ``preferred`` values:
+    - ``"bing"``           – Bing API (requires BING_API_KEY)
+    - ``"serpapi"``        – SerpAPI with Google engine (requires SERPAPI_KEY)
+    - ``"serpapi_google"`` – SerpAPI with Google engine (requires SERPAPI_KEY)
+    - ``"serpapi_bing"``   – SerpAPI with Bing engine (requires SERPAPI_KEY)
+    - ``"auto"``           – prefer Bing if key present, else SerpAPI Google
+    """
     bing_key = os.environ.get("BING_API_KEY")
     serp_key = os.environ.get("SERPAPI_KEY")
+
+    if preferred == "bing":
+        if bing_key:
+            return BingSearchProvider(bing_key)
+        # Fall back to serpapi when bing key is absent
+        return SerpApiSearchProvider(engine="google") if serp_key else None
+    if preferred in ("serpapi", "serpapi_google"):
+        return SerpApiSearchProvider(engine="google") if serp_key else None
+    if preferred == "serpapi_bing":
+        return SerpApiSearchProvider(engine="bing") if serp_key else None
+
+    # auto: prefer Bing, fall back to SerpAPI Google
     if bing_key:
         return BingSearchProvider(bing_key)
     if serp_key:
-        return SerpApiSearchProvider(serp_key)
+        return SerpApiSearchProvider(engine="google")
     return None
 
 
@@ -172,7 +197,6 @@ async def query(payload: QueryRequest) -> QueryResponse:
     graph_state = run_graph(payload.query, payload.options.max_sources)
     response = _build_query_response(payload, graph_state, trace_id)
 
-    # TODO: Integrate real model inference, verification pipeline, and refusal handling.
     TRACE_STORE.save_trace(trace_id, payload.query, _trace_events_to_payload(graph_state.trace_events))
     return response
 
@@ -206,8 +230,7 @@ async def query_stream(payload: QueryRequest) -> StreamingResponse:
 
 @app.post("/v1/search", response_model=SearchResponse)
 async def search(payload: SearchRequest) -> SearchResponse:
-    # TODO: Add provider tuning and result filtering.
-    provider = _resolve_search_provider()
+    provider = _resolve_search_provider(payload.search_provider)
     if provider is None:
         raise HTTPException(
             status_code=503,

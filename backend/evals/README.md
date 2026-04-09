@@ -1,25 +1,36 @@
-# Evaluation harness
+# Evaluation Harness
 
-This folder contains a minimal evaluation harness to score:
-- Faithfulness (string match for expected facts)
-- Citation coverage (expected citation tokens found in citation titles/urls)
+Scores research query responses against a baseline dataset.
+
+## Metrics
+
+| Metric | Description |
+|--------|-------------|
+| **Faithfulness** | Fraction of expected facts found (substring match) in the answer |
+| **Citation Coverage** | Fraction of expected citation tokens found in citation titles/URLs |
+| **Hallucination Score** | Fraction of answer sentences grounded in evidence (1.0 = no hallucination) |
+| **Latency** | Round-trip time in milliseconds for each query |
 
 ## Dataset
 
-`baseline.jsonl` contains a small set of 5 example prompts aligned to sample documents.
+`baseline.jsonl` contains 5 example prompts aligned to sample documents. Each line is a JSON object:
+
+```json
+{"id": "ex-001", "query": "...", "expected_facts": ["..."], "expected_citations": ["..."]}
+```
 
 ## Run
 
-With the API running:
+With the API running on port 8000:
 
-```powershell
+```bash
 python -m backend.evals.run
 ```
 
 Override dataset or API base:
 
-```powershell
-python -m backend.evals.run backend\evals\baseline.jsonl http://localhost:8000
+```bash
+python -m backend.evals.run backend/evals/baseline.jsonl http://localhost:8000
 ```
 
 Environment variable:

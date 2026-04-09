@@ -44,3 +44,4 @@ pnpm-debug.log*
 *.pid
 *.db
 *.sqlite3
+check_models.py

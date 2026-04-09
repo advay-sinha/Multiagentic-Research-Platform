@@ -39,7 +39,14 @@ def _get_conn():
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL is required for pgvector storage")
     conn = psycopg2.connect(settings.database_url)
-    register_vector(conn)
+    try:
+        register_vector(conn)
+    except psycopg2.ProgrammingError as exc:
+        conn.close()
+        raise RuntimeError(
+            "pgvector extension not installed on the database. "
+            "Run 'CREATE EXTENSION vector;' as a superuser, then restart."
+        ) from exc
     try:
         yield conn
     finally:
@@ -50,41 +57,45 @@ def init_db() -> None:
     settings = load_settings()
     if not settings.database_url:
         return
-    with _get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS documents (
-                    document_id TEXT PRIMARY KEY,
-                    filename TEXT NOT NULL,
-                    uploaded_at TEXT NOT NULL,
-                    size_bytes INTEGER NOT NULL,
-                    status TEXT NOT NULL,
-                    metadata JSONB NOT NULL
+    try:
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS documents (
+                        document_id TEXT PRIMARY KEY,
+                        filename TEXT NOT NULL,
+                        uploaded_at TEXT NOT NULL,
+                        size_bytes INTEGER NOT NULL,
+                        status TEXT NOT NULL,
+                        metadata JSONB NOT NULL
+                    )
+                    """
                 )
-                """
-            )
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS chunks (
-                    chunk_id TEXT PRIMARY KEY,
-                    document_id TEXT NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,
-                    chunk_index INTEGER NOT NULL,
-                    text TEXT NOT NULL,
-                    embedding VECTOR(%s) NOT NULL,
-                    url TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    published_at TEXT NOT NULL,
-                    chunk_start INTEGER NOT NULL,
-                    chunk_end INTEGER NOT NULL
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS chunks (
+                        chunk_id TEXT PRIMARY KEY,
+                        document_id TEXT NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,
+                        chunk_index INTEGER NOT NULL,
+                        text TEXT NOT NULL,
+                        embedding VECTOR(%s) NOT NULL,
+                        url TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        published_at TEXT NOT NULL,
+                        chunk_start INTEGER NOT NULL,
+                        chunk_end INTEGER NOT NULL
+                    )
+                    """,
+                    (settings.embedding_dim,),
                 )
-                """,
-                (settings.embedding_dim,),
-            )
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_embedding ON chunks USING ivfflat (embedding vector_cosine_ops)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_document ON chunks (document_id)")
-        conn.commit()
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_embedding ON chunks USING ivfflat (embedding vector_cosine_ops)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_document ON chunks (document_id)")
+            conn.commit()
+    except Exception:
+        # Graceful no-op: DB configured but unreachable at startup. Routes will degrade.
+        pass
 
 
 def add_document(text: str, filename: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -104,7 +115,12 @@ def add_document(text: str, filename: str, metadata: Optional[Dict[str, Any]] = 
     published_at = safe_metadata.get("published_at") or uploaded_at
 
     chunks = _chunk_text(text)
-    embeddings = embed_texts([chunk for chunk, _, _ in chunks]) if chunks else []
+    try:
+        embeddings = embed_texts([chunk for chunk, _, _ in chunks]) if chunks else []
+    except Exception as exc:
+        import logging
+        logging.getLogger("research_api").warning("embed_texts failed for %s: %s", filename, exc)
+        raise RuntimeError(f"Embedding generation failed: {exc}") from exc
 
     with _get_conn() as conn:
         with conn.cursor() as cur:
@@ -201,21 +217,24 @@ def get_document(document_id: str) -> Optional[Dict[str, Any]]:
 def search(query: str, limit: int = 8) -> List[Dict[str, Any]]:
     if not load_settings().database_url:
         return []
-    embeddings = embed_texts([query])
-    query_vector = embeddings[0]
-    with _get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT chunk_id, document_id, text, url, title, published_at, chunk_start, chunk_end,
-                       1 - (embedding <=> %s::vector) AS score
-                FROM chunks
-                ORDER BY embedding <=> %s::vector
-                LIMIT %s
-                """,
-                (query_vector, query_vector, limit),
-            )
-            rows = cur.fetchall()
+    try:
+        embeddings = embed_texts([query])
+        query_vector = embeddings[0]
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT chunk_id, document_id, text, url, title, published_at, chunk_start, chunk_end,
+                           1 - (embedding <=> %s::vector) AS score
+                    FROM chunks
+                    ORDER BY embedding <=> %s::vector
+                    LIMIT %s
+                    """,
+                    (query_vector, query_vector, limit),
+                )
+                rows = cur.fetchall()
+    except Exception:
+        return []
 
     results: List[Dict[str, Any]] = []
     for row in rows:
