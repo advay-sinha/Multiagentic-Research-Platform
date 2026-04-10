@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 import httpx
 
 from .settings import load_settings
 
 _logger = logging.getLogger("research_api")
+
+# Retry config for transient errors (429 rate-limit, 503 overloaded)
+_MAX_RETRIES = 3
+_RETRY_BACKOFF = [2, 5, 10]  # seconds between retries
+_RETRYABLE_STATUS = {429, 503}
 
 
 class LLMClient:
@@ -35,18 +41,37 @@ class LLMClient:
             "contents": [{"parts": [{"text": user_content}]}],
             "generationConfig": {"temperature": 0.2},
         }
-        try:
-            with httpx.Client(timeout=60.0) as client:
-                response = client.post(url, json=payload)
-                response.raise_for_status()
-                data = response.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        except httpx.HTTPStatusError as exc:
-            _logger.warning("Gemini API HTTP %s — falling back to stub", exc.response.status_code)
-            return self._stub(prompt, user_content)
-        except Exception as exc:
-            _logger.warning("Gemini API error (%s) — falling back to stub", exc)
-            return self._stub(prompt, user_content)
+
+        last_exc = None
+        for attempt in range(_MAX_RETRIES):
+            try:
+                with httpx.Client(timeout=60.0) as client:
+                    response = client.post(url, json=payload)
+                    if response.status_code in _RETRYABLE_STATUS:
+                        wait = _RETRY_BACKOFF[min(attempt, len(_RETRY_BACKOFF) - 1)]
+                        _logger.warning(
+                            "Gemini API %s (attempt %d/%d) — retrying in %ds",
+                            response.status_code, attempt + 1, _MAX_RETRIES, wait,
+                        )
+                        time.sleep(wait)
+                        continue
+                    response.raise_for_status()
+                    data = response.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            except httpx.HTTPStatusError as exc:
+                last_exc = exc
+                _logger.warning("Gemini API HTTP %s — falling back to stub", exc.response.status_code)
+                return self._stub(prompt, user_content)
+            except Exception as exc:
+                last_exc = exc
+                _logger.warning("Gemini API error (%s) — falling back to stub", exc)
+                return self._stub(prompt, user_content)
+
+        _logger.warning(
+            "Gemini API failed after %d retries — falling back to stub (last: %s)",
+            _MAX_RETRIES, last_exc or "retryable status",
+        )
+        return self._stub(prompt, user_content)
 
     def _generate_openai(self, prompt: str, user_content: str) -> str:
         payload = {

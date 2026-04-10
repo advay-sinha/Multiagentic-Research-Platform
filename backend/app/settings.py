@@ -25,7 +25,7 @@ def load_settings() -> Settings:
     llm_provider = os.environ.get("LLM_PROVIDER") or "gemini"
     openai_model = os.environ.get("OPENAI_MODEL") or "gpt-4o-mini"
     gemini_api_key = os.environ.get("GEMINI_API_KEY") or ""
-    gemini_model = os.environ.get("GEMINI_MODEL") or "gemini-2.0-flash"
+    gemini_model = os.environ.get("GEMINI_MODEL") or "gemini-2.5-flash"
     cors_allow_origin = os.environ.get("CORS_ALLOW_ORIGIN") or "http://localhost:3000"
     max_agent_iterations = int(os.environ.get("MAX_AGENT_ITERATIONS") or "5")
     return Settings(

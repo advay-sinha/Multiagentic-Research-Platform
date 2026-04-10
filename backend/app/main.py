@@ -63,9 +63,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Autonomous Agentic Research Platform", version="0.1.0", lifespan=lifespan)
 
+_cors_origin = load_settings().cors_allow_origin
+_cors_origins = [
+    _cors_origin,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[load_settings().cors_allow_origin],
+    allow_origins=list(set(_cors_origins)),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
