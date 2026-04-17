@@ -15,6 +15,13 @@ WORKFLOWS.md
 AGENTS.md
 docs/*
 .mcp.json
+/agents-env.md
+/research.pdf
+/research.txt
+/sample.txt
+/sample2.txt
+/backend/evals/data/sample.txt
+/backend/evals/data/sample2.txt
 
 # Node / Next.js
 node_modules/

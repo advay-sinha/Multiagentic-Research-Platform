@@ -11,12 +11,15 @@ from dotenv import load_dotenv
 
 load_dotenv()  # Load .env before any settings or env-var reads
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from . import cache as rag_cache
+from .auth import current_user_optional, router as auth_router
 from .extraction import fetch_and_extract
 from .langgraph_stub import GraphState, TraceEvent, run_graph
+from .mongo import get_db as get_mongo_db
 from .logging_utils import log_event, setup_logging
 from .pgvector_store import add_document, add_web_document, get_document, init_db, search as pg_search
 from .schemas import (
@@ -33,6 +36,9 @@ from .schemas import (
     SearchResult,
     StageMetrics,
     TraceResponse,
+    UrlIngestItem,
+    UrlIngestRequest,
+    UrlIngestResponse,
 )
 from .search_providers.bing import BingSearchProvider
 from .search_providers.serpapi import SerpApiSearchProvider
@@ -75,10 +81,13 @@ _cors_origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(set(_cors_origins)),
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router, prefix="/v1")
 
 
 @app.middleware("http")
@@ -200,23 +209,102 @@ def _resolve_search_provider(preferred: str = "auto") -> Optional[Any]:
     return None
 
 
+def _save_history(user_id: str, response: QueryResponse) -> None:
+    db = get_mongo_db()
+    if db is None:
+        return
+    try:
+        db.query_history.insert_one({
+            "user_id": user_id,
+            "query": response.query,
+            "query_hash": rag_cache.query_hash(response.query),
+            "answer_id": response.answer_id,
+            "answer": response.answer,
+            "trace_id": response.trace_id,
+            "confidence_score": response.confidence_score,
+            "citation_count": len(response.citations),
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        })
+    except Exception as exc:
+        log_event(logger, {"event": "history_save_failed", "error": str(exc)})
+
+
+def _cached_response(user_id: Optional[str], query_text: str) -> Optional[QueryResponse]:
+    """Return a cached QueryResponse for this user+query if present."""
+    if not user_id:
+        return None
+    hit = rag_cache.get(user_id, query_text)
+    if not hit:
+        return None
+    try:
+        return QueryResponse(**hit["payload"])
+    except Exception:
+        return None
+
+
 @app.post("/v1/query", response_model=QueryResponse)
-async def query(payload: QueryRequest) -> QueryResponse:
+async def query(
+    payload: QueryRequest,
+    user=Depends(current_user_optional),
+) -> QueryResponse:
+    user_id = user["user_id"] if user else None
+    cached = _cached_response(user_id, payload.query)
+    if cached is not None:
+        log_event(logger, {"event": "cache_hit", "user_id": user_id, "trace_id": cached.trace_id})
+        return cached
+
     trace_id = f"trace-{uuid.uuid4().hex[:8]}"
     graph_state = run_graph(payload.query, payload.options.max_sources)
     response = _build_query_response(payload, graph_state, trace_id)
 
     TRACE_STORE.save_trace(trace_id, payload.query, _trace_events_to_payload(graph_state.trace_events))
+    if user_id:
+        rag_cache.put(user_id, payload.query, _dump_model(response))
+        _save_history(user_id, response)
     return response
 
 
 @app.post("/v1/query/stream")
-async def query_stream(payload: QueryRequest) -> StreamingResponse:
+async def query_stream(
+    payload: QueryRequest,
+    user=Depends(current_user_optional),
+) -> StreamingResponse:
+    user_id = user["user_id"] if user else None
+    cached = _cached_response(user_id, payload.query)
+    if cached is not None:
+        log_event(logger, {"event": "cache_hit", "user_id": user_id, "trace_id": cached.trace_id})
+
+        async def cached_stream() -> AsyncGenerator[str, None]:
+            yield (
+                "event: trace_event\ndata: "
+                + json.dumps(
+                    {
+                        "event_id": "evt-cache-000",
+                        "agent": "Cache",
+                        "event_type": "hit",
+                        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                        "payload": {"message": "Past evidence reused from user cache."},
+                    },
+                    ensure_ascii=True,
+                )
+                + "\n\n"
+            )
+            for citation in cached.citations:
+                yield f"event: citation\ndata: {json.dumps(_dump_model(citation), ensure_ascii=True)}\n\n"
+            for chunk in _chunk_answer(cached.answer):
+                yield f"event: answer_delta\ndata: {json.dumps({'text': chunk}, ensure_ascii=True)}\n\n"
+            yield f"event: final\ndata: {json.dumps(_dump_model(cached), ensure_ascii=True)}\n\n"
+
+        return StreamingResponse(cached_stream(), media_type="text/event-stream")
+
     trace_id = f"trace-{uuid.uuid4().hex[:8]}"
     graph_state = run_graph(payload.query, payload.options.max_sources)
     response = _build_query_response(payload, graph_state, trace_id)
 
     TRACE_STORE.save_trace(trace_id, payload.query, _trace_events_to_payload(graph_state.trace_events))
+    if user_id:
+        rag_cache.put(user_id, payload.query, _dump_model(response))
+        _save_history(user_id, response)
 
     async def event_stream() -> AsyncGenerator[str, None]:
         for event in graph_state.trace_events:
@@ -305,6 +393,46 @@ async def upload_document(
     metadata_payload = json.loads(metadata) if metadata else {}
     record = add_document(text=text, filename=file.filename, metadata=metadata_payload)
     return DocumentUploadResponse(document_id=record["document_id"], status=record["status"], pages=1)
+
+
+@app.post("/v1/ingest/url", response_model=UrlIngestResponse)
+async def ingest_urls(payload: UrlIngestRequest) -> UrlIngestResponse:
+    """Fetch URL content, extract text, and index into the vector store.
+
+    Accepts a list of URLs. Each is processed independently — a single
+    failure does not abort the batch.
+    """
+    items: list[UrlIngestItem] = []
+    for raw_url in payload.urls:
+        url = raw_url.strip()
+        if not url:
+            continue
+        try:
+            extracted = fetch_and_extract(url, title=url, published_at=None)
+            if not extracted or not extracted.text:
+                items.append(UrlIngestItem(url=url, status="failed", error="extraction_empty"))
+                continue
+            record = add_web_document(
+                url=extracted.url,
+                title=extracted.title,
+                text=extracted.text,
+                published_at=extracted.published_at,
+                metadata={"source": "manual_ingest"},
+            )
+            items.append(
+                UrlIngestItem(
+                    url=extracted.url,
+                    status=record.get("status", "indexed"),
+                    document_id=record.get("document_id"),
+                    title=extracted.title,
+                )
+            )
+        except Exception as exc:  # isolate per-URL failures
+            items.append(UrlIngestItem(url=url, status="failed", error=str(exc)))
+
+    indexed = sum(1 for i in items if i.status not in ("failed",))
+    failed = sum(1 for i in items if i.status == "failed")
+    return UrlIngestResponse(items=items, indexed_count=indexed, failed_count=failed)
 
 
 @app.get("/v1/documents/{document_id}", response_model=DocumentMetadataResponse)

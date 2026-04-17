@@ -272,7 +272,7 @@ Only the active variables (ones the code actually reads):
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model for generation |
 | `OPENAI_API_KEY` | — | Used when `LLM_PROVIDER=openai` |
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model for generation |
-| `EMBEDDING_MODEL` | `models/gemini-embedding-001` | Embedding model |
+| `EMBEDDING_MODEL` | `models/gemini-embedding-002` | Embedding model |
 | `EMBEDDING_DIM` | `768` | Embedding vector dimension |
 | `DATABASE_URL` | — | PostgreSQL connection string |
 | `BING_API_KEY` | — | Bing Search API v7 key |
@@ -318,7 +318,7 @@ curl -N -X POST http://localhost:8000/v1/query/stream \
 
 # Upload document (indexed into pgvector for retrieval)
 curl -X POST http://localhost:8000/v1/documents \
-  -F "file=@sample.txt"
+  -F "file=@backend/evals/data/sample.txt"
 
 # Web search + index (fetches, extracts, embeds, and stores results)
 curl -X POST http://localhost:8000/v1/search \
@@ -525,7 +525,7 @@ curl http://localhost:8000/v1/traces/<trace_id>
 ```bash
 # Upload a document
 curl -X POST http://localhost:8000/v1/documents \
-  -F "file=@sample.txt"
+  -F "file=@backend/evals/data/sample.txt"
 
 # Note the document_id from the response, then:
 curl http://localhost:8000/v1/documents/<document_id>

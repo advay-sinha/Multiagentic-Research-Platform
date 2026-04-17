@@ -9,3 +9,9 @@ trafilatura==1.7.0
 readability-lxml==0.8.1
 serpapi>=0.1.5
 python-dotenv>=1.0.0
+# Auth + user history
+pymongo>=4.9.0
+bcrypt>=4.2.0
+PyJWT>=2.9.0
+# Local embedding fallback (used when Gemini quota exhausted)
+fastembed>=0.4.0

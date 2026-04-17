@@ -108,6 +108,24 @@ class DocumentUploadResponse(BaseModel):
     pages: int
 
 
+class UrlIngestRequest(BaseModel):
+    urls: List[str] = Field(..., min_length=1)
+
+
+class UrlIngestItem(BaseModel):
+    url: str
+    status: str
+    document_id: Optional[str] = None
+    title: Optional[str] = None
+    error: Optional[str] = None
+
+
+class UrlIngestResponse(BaseModel):
+    items: List[UrlIngestItem]
+    indexed_count: int
+    failed_count: int
+
+
 class DocumentMetadataResponse(BaseModel):
     document_id: str
     filename: str
@@ -119,3 +137,41 @@ class DocumentMetadataResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     version: str
+
+
+# ─── Auth ───────────────────────────────────────────────────────────────────
+
+class SignupRequest(BaseModel):
+    email: str = Field(..., min_length=3)
+    password: str = Field(..., min_length=6)
+    name: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., min_length=3)
+    password: str = Field(..., min_length=1)
+
+
+class UserResponse(BaseModel):
+    user_id: str
+    email: str
+    name: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
+
+
+class QueryHistoryItem(BaseModel):
+    query: str
+    answer_id: str
+    trace_id: str
+    confidence_score: float
+    created_at: str
+    citation_count: int
+
+
+class QueryHistoryResponse(BaseModel):
+    items: List[QueryHistoryItem]
